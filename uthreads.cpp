@@ -52,21 +52,25 @@ int uthread_init(int quantum_usecs) {
         return -1;
     }
 
-    Thread main_thread;
+    Thread main_thread(nullptr);
+    uthreads_utils::threads[0] = main_thread;
     return 0;
 }
 
-/// class Thread
+////////////////////
+/// class Thread ///
+////////////////////
+
 class Thread {
     using namespace uthreads_utils;
 
-    // Attributes
+public:
+    jmp_buf env;
+    Thread(void *entryPoint);
+
 private:
     status_t status;
     void *entry_point;
-
-public:
-    jmp_buf env;
 
     void setStatus (status_t new_status){
         Thread::status = new_status;
@@ -76,3 +80,11 @@ public:
         return status;
     }
 };
+
+//////////////////////////////
+/// Thread Implementations ///
+//////////////////////////////
+
+Thread::Thread(void *entryPoint) {
+    entry_point = entryPoint;
+}
