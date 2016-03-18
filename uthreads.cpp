@@ -20,8 +20,17 @@ int uthread_init(int quantum_usecs) {
     // the scheduler mechanics
     void timer_handler(int sig)
     {
-        // todo Block SIG_VTALRM
-        // todo handle SIG_VTALRM
+        // Block SIGVTALRM
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGVTALRM);
+        sigprocmask(SIG_SETMASK, &set, NULL);
+
+        //todo handle signal
+
+
+        // unblock SIGVTALRM
+        sigprocmask(SIG_BLOCK, &set, NULL);
     }
 
     // Install timer_handler as the signal handler for SIGVTALRM.
