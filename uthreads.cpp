@@ -8,7 +8,6 @@
 #include <list>
 #include "uthreads.h"
 
-#define STACK_SIZE 4096
 #define MAIN_THREAD 0
 
 #ifdef __x86_64__
@@ -60,8 +59,8 @@ namespace uthreads_utils {
     sigaction sig_handler;
     enum status_t {Ready, Blocked, Sleeping, Running};
     unsigned int generalQuantaCounter = 1;
-    Thread threads[MAX_THREAD_NUM];
-    sigjmp_buf env[MAX_THREAD_NUM];
+    Thread *threads[MAX_THREAD_NUM];
+//    sigjmp_buf env[MAX_THREAD_NUM]; todo remove
     std::vector<Thread*> readyThreads; // todo check better option than vector
     std::vector<Thread*> blockedThreads;
     std::vector<Thread*> sleepingThreads; // todo remove if not needed
@@ -104,29 +103,36 @@ namespace uthreads_utils {
         // add the threads that finished sleeping to ready vector
         wakeupSleepingThreads();
 
-        // if the running thread has blocked itself, add it to blocked vector
-        switch (runningThread->getStatus()) {
-            case Running:
-                runningThread->setStatus(Ready);
-                readyThreads.insert(readyThreads.begin(), runningThread);
-                break;
 
-            case Blocked:
-                blockedThreads.insert(blockedThreads.begin(), runningThread);
-                break;
-
-            case Sleeping:
-                sleepingThreads.insert(sleepingThreads.begin(), runningThread);
-                break;
-
-            case Ready:
-                std::cerr << "Error: Running thread is in ready Status while "
-                                 "running!" << std::endl; // todo remove
-                break;
+        if (runningThread->getStatus() == Running){
+            runningThread->setStatus(Ready);
+            readyThreads.insert(readyThreads.begin(), runningThread);
         }
+
+
+//        // if the running thread has blocked itself, add it to blocked vector
+//        switch (runningThread->getStatus()) {
+//            case Running:
+//
+//                break;
+//
+//            case Blocked:
+//                blockedThreads.insert(blockedThreads.begin(), runningThread);
+//                break;
+//
+//            case Sleeping:
+//                sleepingThreads.insert(sleepingThreads.begin(), runningThread);
+//                break;
+//
+//            case Ready:
+//                std::cerr << "Error: Running thread is in ready Status while "
+//                                 "running!" << std::endl; // todo remove
+//                break;
+//        }
 
         // first thread in ready vector become running
         runningThread = readyThreads.back();
+        runningThread->setStatus(Ready);
         readyThreads.pop_back();
 
         // unblock SIGVTALRM
@@ -145,49 +151,7 @@ namespace uthreads_utils {
     }
 }
 
-///////////////////////////////
-/// Library Implementations ///
-///////////////////////////////
 
-using namespace uthreads_utils;
-
-int uthread_init(int quantum_usecs) {
-
-    // initialize the quantum length in micro seconds.
-    quantumLength = quantum_usecs;
-
-    // check that parameter is positive
-    if (quantum_usecs <= 0) {
-        std::cerr << "thread library error: parameter quantum_usecs must be positive" << std::endl;
-        return -1;
-    }
-
-    // Install timer_handler as the signal handler for SIGVTALRM.
-    sig_handler.sa_handler = timer_handler;
-    sig_handler.sa_flags = 0;
-    if (sigaction(SIGVTALRM, &(sig_handler), NULL) < 0) {
-        std::cerr << "system error: sigaction failed with errno: " << errno << std::endl;
-        exit(1);
-    }
-
-    // Configure the timer to expire after "quantum_usecs".
-    timer.it_value.tv_sec = 0;
-    timer.it_value.tv_usec = quantum_usecs;
-
-    // configure the timer to not execute an interval.
-    timer.it_interval.tv_sec = 0;
-    timer.it_interval.tv_usec = 0;
-
-    // Start a virtual timer. It counts down whenever this process is executing.
-    if (setitimer(ITIMER_VIRTUAL, &(timer), nullptr)){
-        std::cerr << "system error: sigaction failed with errno: " << errno << std::endl;
-        exit(1);
-    }
-
-    Thread main_thread(nullptr, MAIN_THREAD);
-    threads[0] = main_thread;
-    return 0;
-}
 
 ////////////////////
 /// class Thread ///
@@ -265,7 +229,62 @@ int Thread::getSleepingCountdown() const {
 /// Library Functions Implementations ///
 /////////////////////////////////////////
 
-int uthread_block(int tid){
+using namespace uthreads_utils;
+
+// helper function that checks that the id of the thread exists and is not the
+// main thread
+int checkTidLegallity(int tid){
+    if (tid == MAIN_THREAD){
+        std::cerr << "thread library error: can't block or resume "
+                "the main thread" << std::endl;
+        return -1;
+    }
+
+    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1){
+        std::cerr << "thread library error: parameter tid must be refer to an "
+                "id of an existing thread" << std::endl;
+        return -1;
+    }
+    return 0;
+}
+
+int uthread_init(int quantum_usecs) {
+
+    // initialize the quantum length in micro seconds.
+    quantumLength = quantum_usecs;
+
+    // check that parameter is positive
+    if (quantum_usecs <= 0) {
+        std::cerr << "thread library error: parameter quantum_usecs must be "
+                "positive" << std::endl;
+        return -1;
+    }
+
+    // Install timer_handler as the signal handler for SIGVTALRM.
+    sig_handler.sa_handler = timer_handler;
+    sig_handler.sa_flags = 0;
+    if (sigaction(SIGVTALRM, &(sig_handler), NULL) < 0) {
+        std::cerr << "system error: sigaction failed with errno: " <<
+        errno << std::endl;
+        exit(1);
+    }
+
+    // Configure the timer to expire after "quantum_usecs".
+    timer.it_value.tv_sec = 0;
+    timer.it_value.tv_usec = quantum_usecs;
+
+    // configure the timer to not execute an interval.
+    timer.it_interval.tv_sec = 0;
+    timer.it_interval.tv_usec = 0;
+
+    // Start a virtual timer. It counts down whenever this process is executing.
+    if (setitimer(ITIMER_VIRTUAL, &(timer), nullptr)){
+        std::cerr << "system error: sigaction failed with errno: " << errno <<
+        std::endl;
+        exit(1);
+    }
+
+    threads[0] = new Thread(nullptr, MAIN_THREAD);
     return 0;
 }
 
@@ -277,7 +296,51 @@ int uthread_terminate(int tid) {
     return 0;
 }
 
+int uthread_block(int tid){
+    if (checkTidLegallity(tid)){
+        return -1;
+    }
+
+    if (threads[tid]->getStatus() == Blocked ||
+        threads[tid]->getStatus() == Sleeping) {
+        return 0;
+    }
+
+    threads[tid]->setStatus(Blocked);
+
+    // the tid is the id of the running thread
+    if (tid == uthread_get_tid()){
+        blockedThreads.insert(blockedThreads.begin(), runningThread);
+        timer_handler(0); //finish the quanta
+
+    } else { // the thread is in the ready vector
+        for (int i = 0; i < readyThreads.size(); i++){
+            if (readyThreads[i]->getId() == tid){
+                readyThreads.erase(readyThreads.begin() + i);
+                blockedThreads.insert(blockedThreads.begin(), threads[tid]);
+                break;
+            }
+        }
+    }
+    return 0;
+}
+
 int uthread_resume(int tid) {
+    if (threads[tid]->getStatus() != Blocked){
+        if (checkTidLegallity(tid)){
+            return -1;
+        }
+
+        threads[tid]->setStatus(Ready);
+
+        for (int i = 0; i < blockedThreads.size(); i++){
+            if (blockedThreads[i]->getId() == tid){
+                blockedThreads.erase(blockedThreads.begin() + i);
+                readyThreads.insert(blockedThreads.begin(), threads[tid]);
+                break;
+            }
+        }
+    }
     return 0;
 }
 
@@ -298,6 +361,20 @@ int uthread_get_total_quantums() {
 }
 
 int uthread_get_quantums(int tid) {
-    return threads[tid].getQuantaCounter();
+    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1){
+        std::cerr << "thread library error: parameter tid must be refer to an "
+                             "id of an existing thread" << std::endl;
+        return -1;
+    }
+
+    // if the thread is the running thread then the current quantum should be
+    // included.
+    if (tid == uthread_get_tid()){
+        return (*threads[tid]).getQuantaCounter() + 1;
+    }
+    else{
+        return (*threads[tid]).getQuantaCounter();
+    }
+
 }
 
