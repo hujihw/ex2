@@ -5,6 +5,7 @@
 #include <vector>
 #include <errno.h>
 #include <iostream>
+#include <list>
 #include "uthreads.h"
 
 #define STACK_SIZE 4096
@@ -61,49 +62,87 @@ namespace uthreads_utils {
     unsigned int generalQuantaCounter = 1;
     Thread threads[MAX_THREAD_NUM];
     sigjmp_buf env[MAX_THREAD_NUM];
-    std::vector<Thread> readyThreads; // todo check better option than vector
-    std::vector<Thread> blockedThreads;
-    std::vector<Thread> sleepingThreads; // todo remove if not needed
+    std::vector<Thread*> readyThreads; // todo check better option than vector
+    std::vector<Thread*> blockedThreads;
+    std::vector<Thread*> sleepingThreads; // todo remove if not needed
     Thread* runningThread;
+    Thread* terminateThread = nullptr;
     int quantumLength;
+
+    void wakeupSleepingThreads() {
+        for (int i = 0; i < sleepingThreads.size(); ++i) {
+            (*sleepingThreads[i]).decreaseSleepingCountdown();
+            if ((*sleepingThreads[i]).getSleepingCountdown() == 0) {
+                (*sleepingThreads[i]).setStatus(Ready);
+                readyThreads.push_back(sleepingThreads[i]);
+                sleepingThreads.erase(sleepingThreads.begin() + i);
+            }
+        }
+    }
 
     // the scheduler mechanics
     void timer_handler(int sig)
-        {
-            // Block SIGVTALRM
-            sigset_t set;
-            sigemptyset(&set);
-            sigaddset(&set, SIGVTALRM);
-            sigprocmask(SIG_SETMASK, &set, NULL);
+    {
+        // Block SIGVTALRM
+        signal(SIGVTALRM, SIG_IGN);
+//            sigset_t set; // todo what pending does
+//            sigemptyset(&set);
+//            sigaddset(&set, SIGVTALRM);
+//            sigprocmask(SIG_SETMASK, &set, NULL);
 
-            //todo handle signal
+        generalQuantaCounter += 1;
+        runningThread->quantaCounterUp();
 
-            // Round Robin alg.
-            for (std::vector<Thread>::iterator it = sleepingThreads.begin();
-                    it != sleepingThreads.end(); ++it) {
-                // todo if sleeping over, push_back to ready
-            }
+        ////////////////////////
+        /// Round Robin alg. ///
+        ////////////////////////
 
-            if (runningThread->getStatus() == Blocked) {
-
-            }
-
-
-            // unblock SIGVTALRM
-            sigprocmask(SIG_BLOCK, &set, NULL);
-
-            int ret_val = sigsetjmp(runningThread->env,1);
-
-            // reset the timer
-            timer.it_value.tv_usec = quantumLength;
-
-            if (ret_val == 1) {
-                return;
-            }
-
-            siglongjmp(readyThreads[0].env,1); // todo decide how to
-                                               // implement the queue
+        if (terminateThread != nullptr){
+            // todo terminate the thread
         }
+
+        // add the threads that finished sleeping to ready vector
+        wakeupSleepingThreads();
+
+        // if the running thread has blocked itself, add it to blocked vector
+        switch (runningThread->getStatus()) {
+            case Running:
+                runningThread->setStatus(Ready);
+                readyThreads.insert(readyThreads.begin(), runningThread);
+                break;
+
+            case Blocked:
+                blockedThreads.insert(blockedThreads.begin(), runningThread);
+                break;
+
+            case Sleeping:
+                sleepingThreads.insert(sleepingThreads.begin(), runningThread);
+                break;
+
+            case Ready:
+                std::cerr << "Error: Running thread is in ready Status while "
+                                 "running!" << std::endl; // todo remove
+                break;
+        }
+
+        // first thread in ready vector become running
+        runningThread = readyThreads.back();
+        readyThreads.pop_back();
+
+        // unblock SIGVTALRM
+        signal(SIGVTALRM, SIG_DFL);
+
+        int ret_val = sigsetjmp(runningThread->env, 1);
+
+        // reset the timer
+        timer.it_value.tv_usec = quantumLength;
+
+        if (ret_val == 1) {
+            return;
+        }
+
+        siglongjmp((*readyThreads[0]).env, 1);
+    }
 }
 
 ///////////////////////////////
@@ -125,6 +164,7 @@ int uthread_init(int quantum_usecs) {
 
     // Install timer_handler as the signal handler for SIGVTALRM.
     sig_handler.sa_handler = timer_handler;
+    sig_handler.sa_flags = 0;
     if (sigaction(SIGVTALRM, &(sig_handler), NULL) < 0) {
         std::cerr << "system error: sigaction failed with errno: " << errno << std::endl;
         exit(1);
@@ -159,35 +199,20 @@ class Thread {
 public:
     sigjmp_buf env;
     Thread(void *entryPoint, const unsigned int id);
+    void quantaCounterUp();
+    void setStatus(status_t new_status);
+    const status_t getStatus() const;
+    unsigned int getId() const;
+    unsigned int getQuantaCounter() const;
+    int getSleepingCountdown() const;
+    void setSleepingCountdown(int sleepingCountdown);
+    void decreaseSleepingCountdown();
 
 private:
-public:
-    unsigned int getId() const {
-        return id;
-    }
-
-    unsigned int getQuantaCounter() const {
-        return quantaCounter;
-    }
-
-private:
+    int sleepingCountdown;
     unsigned int id;
     status_t status;
     void *entry_point;
-public:
-    void setQuantaCounter(unsigned int quantaCounter) {
-        Thread::quantaCounter = quantaCounter;
-    }
-
-    void setStatus (status_t new_status){
-        Thread::status = new_status;
-    }
-
-    const status_t getStatus() const {
-        return status;
-    }
-
-private:
     unsigned int quantaCounter;
     char stack[STACK_SIZE];
 };
@@ -199,4 +224,47 @@ private:
 Thread::Thread(void *entryPoint, const unsigned int id) {
     Thread::id = id;
     Thread::entry_point = entryPoint;
+}
+
+unsigned int Thread::getQuantaCounter() const {
+    return quantaCounter;
+}
+
+unsigned int Thread::getId() const {
+    return id;
+}
+
+const status_t Thread::getStatus() const {
+    return status;
+}
+
+void Thread::setStatus(status_t new_status) {
+    Thread::status = new_status;
+}
+
+void Thread::quantaCounterUp() {
+    Thread::quantaCounter += 1;
+}
+
+void Thread::decreaseSleepingCountdown() {
+    if (sleepingCountdown > 0) {
+        sleepingCountdown--;
+    }
+}
+
+void Thread::setSleepingCountdown(int sleepingCountdown) {
+    Thread::sleepingCountdown = sleepingCountdown;
+}
+
+int Thread::getSleepingCountdown() const {
+    return sleepingCountdown;
+}
+
+
+/////////////////////////////////////////
+/// Library Functions Implementations ///
+/////////////////////////////////////////
+
+int uthread_block(int tid){
+    return 0;
 }
