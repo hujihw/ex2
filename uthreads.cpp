@@ -61,7 +61,7 @@ namespace uthreads_utils {
     enum status_t {Ready, Blocked, Sleeping, Running};
     unsigned int generalQuantaCounter = 1;
     Thread *threads[MAX_THREAD_NUM];
-    sigjmp_buf env[MAX_THREAD_NUM];
+//    sigjmp_buf env[MAX_THREAD_NUM];
     std::vector<Thread*> readyThreads; // todo check better option than vector
     std::vector<Thread*> blockedThreads;
     std::vector<Thread*> sleepingThreads; // todo remove if not needed
@@ -343,4 +343,7 @@ int uthread_terminate(int tid) {
 }
 
 // sleep
-int uthread_sleep(int num_quantums);
+int uthread_sleep(int num_quantums) {
+    //
+    return 0;
+}
