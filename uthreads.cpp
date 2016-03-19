@@ -213,7 +213,7 @@ private:
     unsigned int id;
     status_t status;
     void *entry_point;
-    unsigned int quantaCounter;
+    unsigned int quantaCounter = 1;
     char stack[STACK_SIZE];
 };
 
@@ -268,3 +268,36 @@ int Thread::getSleepingCountdown() const {
 int uthread_block(int tid){
     return 0;
 }
+
+int uthread_spawn(void (*f)(void)) {
+    return 0;
+}
+
+int uthread_terminate(int tid) {
+    return 0;
+}
+
+int uthread_resume(int tid) {
+    return 0;
+}
+
+int uthread_sleep(int num_quantums) {
+    return 0;
+}
+
+int uthread_get_time_until_wakeup(int tid) {
+    return 0;
+}
+
+int uthread_get_tid() {
+    return runningThread->getId();
+}
+
+int uthread_get_total_quantums() {
+    return generalQuantaCounter;
+}
+
+int uthread_get_quantums(int tid) {
+    return threads[tid].getQuantaCounter();
+}
+
