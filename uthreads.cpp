@@ -345,11 +345,46 @@ int uthread_resume(int tid) {
 }
 
 int uthread_sleep(int num_quantums) {
+    if (num_quantums <= 0){
+        std::cerr << "thread library error: parameter num_quantums must be a "
+                             "positive number" << std::endl;
+        return -1;
+    }
+    if (runningThread->getId() == 0){
+        std::cerr << "thread library error: the main thread can't be put to "
+                             "sleep" << std::endl;
+        return -1;
+    }
+
+    runningThread->setStatus(Sleeping);
+    blockedThreads.insert(blockedThreads.begin(), runningThread);
+    timer_handler(0); //finish the quanta
+    return 0;
+}
+
+int checkTidExists(int tid){
+    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1){
+        std::cerr << "thread library error: parameter tid must be refer to an "
+                "id of an existing thread" << std::endl;
+        return -1;
+    }
     return 0;
 }
 
 int uthread_get_time_until_wakeup(int tid) {
+    // if the tid is not legal the return -1
+    if (checkTidExists(tid)){
+        return -1;
+    }
+    if (threads[tid]->getStatus() == Sleeping){
+        if (tid == MAIN_THREAD){
+            return 0;
+        }
+        return threads[tid]->getSleepingCountdown();
+    }
+    //thread is not sleeping- return zero
     return 0;
+
 }
 
 int uthread_get_tid() {
@@ -361,9 +396,7 @@ int uthread_get_total_quantums() {
 }
 
 int uthread_get_quantums(int tid) {
-    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1){
-        std::cerr << "thread library error: parameter tid must be refer to an "
-                             "id of an existing thread" << std::endl;
+    if (checkTidExists(tid)){
         return -1;
     }
 
