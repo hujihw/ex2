@@ -289,12 +289,15 @@ int uthread_spawn(void (*f)(void)){
     return -1;
 }
 
-// terminate
+// todo when does terminate return -1?
+// todo any more allocated memory needs to be free?
 int uthread_terminate(int tid) {
     // if id is of the running thread, change status to Terminate and
     if (tid == runningThread->getId()){
         terminateThread = runningThread;
+        timer_handler(SIGVTALRM);
     } else if (tid != 0) {
+        // remove pointers to the thread object from blocked/sleeping/ready list
         switch (threads[tid]->getStatus()) {
             case Ready:
                 for (int i = 0; i < readyThreads.size(); ++i) {
@@ -305,28 +308,39 @@ int uthread_terminate(int tid) {
                 break;
 
             case Sleeping:
-                for (int i = 0; i < readyThreads.size(); ++i) {
-                    if (readyThreads[i]->getId() == tid){
-                        readyThreads.erase(readyThreads.begin() + i);
+                for (int i = 0; i < sleepingThreads.size(); ++i) {
+                    if (sleepingThreads[i]->getId() == tid) {
+                        sleepingThreads.erase(sleepingThreads.begin() + i);
                     }
                 }
                 break;
 
             case Blocked:
+                for (int i = 0; i < blockedThreads.size(); ++i) {
+                    if (blockedThreads[i]->getId() == tid){
+                        blockedThreads.erase(blockedThreads.begin() + i);
+                    }
+                }
                 break;
 
+            // do nothing. just to make sure all cases are handled.
             case Running:
                 break;
         }
+        // delete the thread object after all of it's pointers were removed
         delete threads[tid];
+        return 0;
     } else {
-        return 0; //todo terminate program
+        for (int i = 1; i < MAX_THREAD_NUM; ++i) {
+            if (threads[i] != nullptr) {
+                delete threads[i];
+            }
+        }
+
+        exit(0);
     }
-    //
-    // add
     return 0;
 }
 
 // sleep
-
-// resume
+int uthread_sleep(int num_quantums);
