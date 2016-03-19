@@ -60,7 +60,7 @@ namespace uthreads_utils {
     sigaction sig_handler;
     enum status_t {Ready, Blocked, Sleeping, Running};
     unsigned int generalQuantaCounter = 1;
-    Thread threads[MAX_THREAD_NUM];
+    Thread *threads[MAX_THREAD_NUM];
     sigjmp_buf env[MAX_THREAD_NUM];
     std::vector<Thread*> readyThreads; // todo check better option than vector
     std::vector<Thread*> blockedThreads;
@@ -184,8 +184,8 @@ int uthread_init(int quantum_usecs) {
         exit(1);
     }
 
-    Thread main_thread(nullptr, MAIN_THREAD);
-    threads[0] = main_thread;
+    threads[0] = new Thread(nullptr, MAIN_THREAD);
+
     return 0;
 }
 
@@ -199,6 +199,7 @@ class Thread {
 public:
     sigjmp_buf env;
     Thread(void *entryPoint, const unsigned int id);
+    ~Thread();
     void quantaCounterUp();
     void setStatus(status_t new_status);
     const status_t getStatus() const;
@@ -208,22 +209,27 @@ public:
     void setSleepingCountdown(int sleepingCountdown);
     void decreaseSleepingCountdown();
 
+
 private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
     void *entry_point;
     unsigned int quantaCounter;
-    char stack[STACK_SIZE];
+    char *stack;
 };
 
 //////////////////////////////
 /// Thread Implementations ///
 //////////////////////////////
 
-Thread::Thread(void *entryPoint, const unsigned int id) {
-    Thread::id = id;
-    Thread::entry_point = entryPoint;
+Thread::Thread(void *entryPoint, const unsigned int id): id(id), entry_point
+        (entryPoint), status(Ready) {
+    stack = new char[STACK_SIZE];
+}
+
+Thread::~Thread() {
+    delete[] stack;
 }
 
 unsigned int Thread::getQuantaCounter() const {
@@ -268,3 +274,59 @@ int Thread::getSleepingCountdown() const {
 int uthread_block(int tid){
     return 0;
 }
+
+int uthread_spawn(void (*f)(void)){
+    // verify the array of threads is not full, and find the minimal id to spawn
+    for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
+        if (threads[i] == nullptr) {
+            threads[i] = new Thread(f, i);
+            readyThreads.insert(readyThreads.begin(), threads[i]);
+            return i;
+        }
+    }
+
+    // no room for another thread.
+    return -1;
+}
+
+// terminate
+int uthread_terminate(int tid) {
+    // if id is of the running thread, change status to Terminate and
+    if (tid == runningThread->getId()){
+        terminateThread = runningThread;
+    } else if (tid != 0) {
+        switch (threads[tid]->getStatus()) {
+            case Ready:
+                for (int i = 0; i < readyThreads.size(); ++i) {
+                    if (readyThreads[i]->getId() == tid){
+                        readyThreads.erase(readyThreads.begin() + i);
+                    }
+                }
+                break;
+
+            case Sleeping:
+                for (int i = 0; i < readyThreads.size(); ++i) {
+                    if (readyThreads[i]->getId() == tid){
+                        readyThreads.erase(readyThreads.begin() + i);
+                    }
+                }
+                break;
+
+            case Blocked:
+                break;
+
+            case Running:
+                break;
+        }
+        delete threads[tid];
+    } else {
+        return 0; //todo terminate program
+    }
+    //
+    // add
+    return 0;
+}
+
+// sleep
+
+// resume
