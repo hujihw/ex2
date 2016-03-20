@@ -82,12 +82,16 @@ namespace uthreads_utils {
     // the scheduler mechanics
     void timer_handler(int sig)
     {
-        // Block SIGVTALRM
-        signal(SIGVTALRM, SIG_IGN);
+        // ignore SIGVTALRM
+
+        sigaction sa_ign;
+        sa_ign.sa_handler = SIG_IGN;
+        sigaction(SIGVTALRM, &sa_ign, nullptr);
 //            sigset_t set; // todo what pending does
 //            sigemptyset(&set);
 //            sigaddset(&set, SIGVTALRM);
 //            sigprocmask(SIG_SETMASK, &set, NULL);
+        //        signal(SIGVTALRM, SIG_IGN);
 
         generalQuantaCounter += 1;
         runningThread->quantaCounterUp();
@@ -136,7 +140,9 @@ namespace uthreads_utils {
         readyThreads.pop_back();
 
         // unblock SIGVTALRM
-        signal(SIGVTALRM, SIG_DFL);
+        sa_ign.sa_handler = SIG_DFL;
+        sigaction(SIGVTALRM, &sa_ign, nullptr);
+//        signal(SIGVTALRM, SIG_DFL);
 
         int ret_val = sigsetjmp(runningThread->env, 1);
 
@@ -163,6 +169,7 @@ class Thread {
 public:
     sigjmp_buf env;
     Thread(void *entryPoint, const unsigned int id);
+    ~Thread();
     void quantaCounterUp();
     void setStatus(status_t new_status);
     const status_t getStatus() const;
@@ -172,22 +179,27 @@ public:
     void setSleepingCountdown(int sleepingCountdown);
     void decreaseSleepingCountdown();
 
+
 private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
     void *entry_point;
     unsigned int quantaCounter = 1;
-    char stack[STACK_SIZE];
+    char *stack;
 };
 
 //////////////////////////////
 /// Thread Implementations ///
 //////////////////////////////
 
-Thread::Thread(void *entryPoint, const unsigned int id) {
-    Thread::id = id;
-    Thread::entry_point = entryPoint;
+Thread::Thread(void *entryPoint, const unsigned int id): id(id), entry_point
+        (entryPoint), status(Ready) {
+    stack = new char[STACK_SIZE];
+}
+
+Thread::~Thread() {
+    delete[] stack;
 }
 
 unsigned int Thread::getQuantaCounter() const {
@@ -289,15 +301,19 @@ int uthread_init(int quantum_usecs) {
 }
 
 int uthread_spawn(void (*f)(void)) {
-    return 0;
+    // verify the array of threads is not full, and find the minimal id to spawn
+    for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
+        if (threads[i] == nullptr) {
+            threads[i] = new Thread(f, i);
+            readyThreads.insert(readyThreads.begin(), threads[i]);
+            return i;
+        }
+        // no room for another thread.
+        return -1;
+    }
 }
-
-int uthread_terminate(int tid) {
-    return 0;
-}
-
-int uthread_block(int tid){
-    if (checkTidLegallity(tid)){
+int uthread_block(int tid) {
+    if (checkTidLegallity(tid)) {
         return -1;
     }
 
@@ -309,13 +325,13 @@ int uthread_block(int tid){
     threads[tid]->setStatus(Blocked);
 
     // the tid is the id of the running thread
-    if (tid == uthread_get_tid()){
+    if (tid == uthread_get_tid()) {
         blockedThreads.insert(blockedThreads.begin(), runningThread);
         timer_handler(0); //finish the quanta
 
     } else { // the thread is in the ready vector
-        for (int i = 0; i < readyThreads.size(); i++){
-            if (readyThreads[i]->getId() == tid){
+        for (int i = 0; i < readyThreads.size(); i++) {
+            if (readyThreads[i]->getId() == tid) {
                 readyThreads.erase(readyThreads.begin() + i);
                 blockedThreads.insert(blockedThreads.begin(), threads[tid]);
                 break;
@@ -326,15 +342,15 @@ int uthread_block(int tid){
 }
 
 int uthread_resume(int tid) {
-    if (threads[tid]->getStatus() != Blocked){
-        if (checkTidLegallity(tid)){
+    if (threads[tid]->getStatus() != Blocked) {
+        if (checkTidLegallity(tid)) {
             return -1;
         }
 
         threads[tid]->setStatus(Ready);
 
-        for (int i = 0; i < blockedThreads.size(); i++){
-            if (blockedThreads[i]->getId() == tid){
+        for (int i = 0; i < blockedThreads.size(); i++) {
+            if (blockedThreads[i]->getId() == tid) {
                 blockedThreads.erase(blockedThreads.begin() + i);
                 readyThreads.insert(blockedThreads.begin(), threads[tid]);
                 break;
@@ -345,14 +361,14 @@ int uthread_resume(int tid) {
 }
 
 int uthread_sleep(int num_quantums) {
-    if (num_quantums <= 0){
+    if (num_quantums <= 0) {
         std::cerr << "thread library error: parameter num_quantums must be a "
-                             "positive number" << std::endl;
+                "positive number" << std::endl;
         return -1;
     }
-    if (runningThread->getId() == 0){
+    if (runningThread->getId() == 0) {
         std::cerr << "thread library error: the main thread can't be put to "
-                             "sleep" << std::endl;
+                "sleep" << std::endl;
         return -1;
     }
 
@@ -362,8 +378,8 @@ int uthread_sleep(int num_quantums) {
     return 0;
 }
 
-int checkTidExists(int tid){
-    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1){
+int checkTidExists(int tid) {
+    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1) {
         std::cerr << "thread library error: parameter tid must be refer to an "
                 "id of an existing thread" << std::endl;
         return -1;
@@ -373,11 +389,11 @@ int checkTidExists(int tid){
 
 int uthread_get_time_until_wakeup(int tid) {
     // if the tid is not legal the return -1
-    if (checkTidExists(tid)){
+    if (checkTidExists(tid)) {
         return -1;
     }
-    if (threads[tid]->getStatus() == Sleeping){
-        if (tid == MAIN_THREAD){
+    if (threads[tid]->getStatus() == Sleeping) {
+        if (tid == MAIN_THREAD) {
             return 0;
         }
         return threads[tid]->getSleepingCountdown();
@@ -396,18 +412,70 @@ int uthread_get_total_quantums() {
 }
 
 int uthread_get_quantums(int tid) {
-    if (checkTidExists(tid)){
+    if (checkTidExists(tid)) {
         return -1;
     }
 
     // if the thread is the running thread then the current quantum should be
     // included.
-    if (tid == uthread_get_tid()){
+    if (tid == uthread_get_tid()) {
         return (*threads[tid]).getQuantaCounter() + 1;
     }
-    else{
+    else {
         return (*threads[tid]).getQuantaCounter();
     }
-
 }
 
+
+// todo when does terminate return -1?
+// todo any more allocated memory needs to be free?
+int uthread_terminate(int tid) {
+    // if id is of the running thread, change status to Terminate and
+    if (tid == runningThread->getId()) {
+        terminateThread = runningThread;
+        timer_handler(SIGVTALRM);
+    } else if (tid != 0) {
+        // remove pointers to the thread object from blocked/sleeping/ready list
+        switch (threads[tid]->getStatus()) {
+            case Ready:
+                for (int i = 0; i < readyThreads.size(); ++i) {
+                    if (readyThreads[i]->getId() == tid) {
+                        readyThreads.erase(readyThreads.begin() + i);
+                    }
+                }
+                break;
+
+            case Sleeping:
+                for (int i = 0; i < sleepingThreads.size(); ++i) {
+                    if (sleepingThreads[i]->getId() == tid) {
+                        sleepingThreads.erase(sleepingThreads.begin() + i);
+                    }
+                }
+                break;
+
+            case Blocked:
+                for (int i = 0; i < blockedThreads.size(); ++i) {
+                    if (blockedThreads[i]->getId() == tid) {
+                        blockedThreads.erase(blockedThreads.begin() + i);
+                    }
+                }
+                break;
+
+                // do nothing. just to make sure all cases are handled.
+            case Running:
+                break;
+        }
+        // delete the thread object after all of it's pointers were removed
+        delete threads[tid];
+        return 0;
+    } else {
+        for (int i = 1; i < MAX_THREAD_NUM; ++i) {
+            if (threads[i] != nullptr) {
+                delete threads[i];
+            }
+        }
+
+        exit(0);
+    }
+    return 0;
+}
