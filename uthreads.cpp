@@ -99,6 +99,9 @@ std::vector<Thread*> sleepingThreads; // todo remove if not needed
 Thread* runningThread;
 Thread* terminateThread = nullptr;
 int quantumLength;
+sigset_t set; //the signal set for sigporcmask
+
+void timer_handler(int sig);
 
 void wakeupSleepingThreads() {
     for (int i = 0; i < sleepingThreads.size(); ++i) {
@@ -111,19 +114,52 @@ void wakeupSleepingThreads() {
     }
 }
 
-// the scheduler mechanics
-void timer_handler(int sig)
-{
-    // ignore SIGVTALRM
-    sig_handler.sa_handler = SIG_IGN;
-    sigaction(SIGVTALRM, &sig_handler, nullptr);
-    std::cout << "Timer Handler" << std::endl; // todo remove
+//block the SIGVTALRM
+void blockSigvtalrm(){
+    sigemptyset(&set);
+    sigaddset(&set, SIGVTALRM);
+    if (sigprocmask(SIG_SETMASK, &set, NULL)){
+        std::cerr << "system error: sigprocmask failed with errno: " <<
+        errno << std::endl;
+        exit(1);
+    }
+}
 
-//            sigset_t set; // todo what pending does
-//            sigemptyset(&set);
-//            sigaddset(&set, SIGVTALRM);
-//            sigprocmask(SIG_SETMASK, &set, NULL);
-    //        signal(SIGVTALRM, SIG_IGN);
+//unblock the SIGVTALRM
+void unBlockSigvtalrm(){
+    sigemptyset(&set);
+    sigaddset(&set, SIGVTALRM);
+    if (sigprocmask(SIG_UNBLOCK, &set, NULL)){
+        std::cerr << "system error: sigprocmask failed with errno: " <<
+        errno << std::endl;
+        exit(1);
+    }
+}
+
+// ignore SIGVTALRM
+void ignoreSigvtalrm() {
+    sig_handler.sa_handler = SIG_IGN;
+    if (sigaction(SIGVTALRM, &sig_handler, nullptr)){
+        std::cerr << "system error: sigaction failed with errno: " <<
+        errno << std::endl;
+        exit(1);
+    }
+}
+
+// un ignore SIGVTALRM
+void unIgnoreSigvtalrm() {
+    sig_handler.sa_handler = timer_handler;
+    if (sigaction(SIGVTALRM, &sig_handler, nullptr)){
+        std::cerr << "system error: sigaction failed with errno: " <<
+        errno << std::endl;
+        exit(1);
+    }
+}
+
+void timer_handler(int sig) {
+    ignoreSigvtalrm();
+
+    std::cout << "Timer Handler" << std::endl; // todo remove
 
     generalQuantaCounter += 1;
     runningThread->quantaCounterUp();
@@ -173,9 +209,7 @@ void timer_handler(int sig)
         runningThread->setStatus(Ready);
         readyThreads.pop_back();
 
-        // unignore SIGVTALRM
-        sig_handler.sa_handler = timer_handler;
-        sigaction(SIGVTALRM, &sig_handler, nullptr);
+        unIgnoreSigvtalrm();
 
         int ret_val = sigsetjmp(runningThread->env, 1);
 
@@ -188,14 +222,24 @@ void timer_handler(int sig)
 
         siglongjmp((*readyThreads[0]).env, 1);
     } else {
-        // unblock SIGVTALRM
-        sig_handler.sa_handler = timer_handler;
-        sigaction(SIGVTALRM, &sig_handler, nullptr);
+        unIgnoreSigvtalrm();
 
         // reset timer
         setitimer(ITIMER_VIRTUAL, &timer, nullptr);
     }
 }
+
+
+// if the threads blocks itself then ignore SIGVTALRM, else block SIGVTALRM
+void blockOrIgnoreSigvtalrm(int tid){
+    if (tid == uthread_get_tid()){
+        ignoreSigvtalrm();
+    } else {
+        blockSigvtalrm();
+    }
+}
+
+
 
 namespace uthreads_utils { // todo remove
 
@@ -273,6 +317,15 @@ int checkTidLegallity(int tid){
     return 0;
 }
 
+int checkTidExists(int tid) {
+    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1) {
+        std::cerr << "thread library error: parameter tid must be refer to an "
+                "id of an existing thread" << std::endl;
+        return -1;
+    }
+    return 0;
+}
+
 int uthread_init(int quantum_usecs) {
 
     // initialize the quantum length in micro seconds.
@@ -317,7 +370,6 @@ int uthread_init(int quantum_usecs) {
 int uthread_spawn(void (*f)(void)) {
 
     // block SIGVTALRM
-    sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGVTALRM);
     sigprocmask(SIG_SETMASK, &set, NULL);
@@ -337,6 +389,9 @@ int uthread_spawn(void (*f)(void)) {
 }
 
 int uthread_block(int tid) {
+
+    blockOrIgnoreSigvtalrm(tid);
+
     if (checkTidLegallity(tid)) {
         return -1;
     }
@@ -361,13 +416,16 @@ int uthread_block(int tid) {
                 break;
             }
         }
+        unBlockSigvtalrm();
     }
     return 0;
 }
 
 int uthread_resume(int tid) {
+    blockSigvtalrm();
+
     if (threads[tid]->getStatus() != Blocked) {
-        if (checkTidLegallity(tid)) {
+        if (checkTidExists(tid)) {
             return -1;
         }
 
@@ -381,10 +439,13 @@ int uthread_resume(int tid) {
             }
         }
     }
+    unBlockSigvtalrm();
     return 0;
 }
 
 int uthread_sleep(int num_quantums) {
+    ignoreSigvtalrm();
+
     if (num_quantums <= 0) {
         std::cerr << "thread library error: parameter num_quantums must be a "
                 "positive number" << std::endl;
@@ -402,16 +463,10 @@ int uthread_sleep(int num_quantums) {
     return 0;
 }
 
-int checkTidExists(int tid) {
-    if (threads[tid] == nullptr || tid > MAX_THREAD_NUM - 1) {
-        std::cerr << "thread library error: parameter tid must be refer to an "
-                "id of an existing thread" << std::endl;
-        return -1;
-    }
-    return 0;
-}
+
 
 int uthread_get_time_until_wakeup(int tid) {
+
     // if the tid is not legal the return -1
     if (checkTidExists(tid)) {
         return -1;
@@ -444,7 +499,7 @@ int uthread_get_quantums(int tid) {
     // included.
     if (tid == uthread_get_tid()) {
 //        int currQuantaPlusOne = (*threads[tid]).getQuantaCounter() + 1;
-//        return currQuantaPlusOne;
+//        return currQuantaPlusOne; // todo debug
         return (*threads[tid]).getQuantaCounter();
     }
     else {
@@ -457,10 +512,24 @@ int uthread_get_quantums(int tid) {
 // todo any more allocated memory needs to be free?
 int uthread_terminate(int tid) {
     // if id is of the running thread, change status to Terminate and
-    if (tid == runningThread->getId()) {
+    if (tid == MAIN_THREAD) {
+        ignoreSigvtalrm();
+
+        for (int i = 1; i < MAX_THREAD_NUM; ++i) {
+            if (threads[i] != nullptr) {
+                delete threads[i];
+            }
+        }
+        exit(0);
+
+    } else if (tid == runningThread->getId()) {
+        ignoreSigvtalrm();
+
         terminateThread = runningThread;
         timer_handler(SIGVTALRM);
-    } else if (tid != 0) {
+    } else {
+        blockSigvtalrm();
+
         // remove pointers to the thread object from blocked/sleeping/ready list
         switch (threads[tid]->getStatus()) {
             case Ready:
@@ -493,15 +562,9 @@ int uthread_terminate(int tid) {
         }
         // delete the thread object after all of it's pointers were removed
         delete threads[tid];
-        return 0;
-    } else {
-        for (int i = 1; i < MAX_THREAD_NUM; ++i) {
-            if (threads[i] != nullptr) {
-                delete threads[i];
-            }
-        }
 
-        exit(0);
+        unBlockSigvtalrm();
+        return 0;
     }
     return 0;
 }
