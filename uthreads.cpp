@@ -54,64 +54,63 @@ address_t translate_address(address_t addr)
 /// Uthreads Utils ///
 //////////////////////
 
-namespace uthreads_utils {
-    itimerval timer;
-    sigaction sig_handler;
-    enum status_t {Ready, Blocked, Sleeping, Running};
-    unsigned int generalQuantaCounter = 1;
-    Thread *threads[MAX_THREAD_NUM];
+itimerval timer;
+sigaction sig_handler;
+enum status_t {Ready, Blocked, Sleeping, Running};
+unsigned int generalQuantaCounter = 1;
+Thread *threads[MAX_THREAD_NUM];
 //    sigjmp_buf env[MAX_THREAD_NUM]; todo remove
-    std::vector<Thread*> readyThreads; // todo check better option than vector
-    std::vector<Thread*> blockedThreads;
-    std::vector<Thread*> sleepingThreads; // todo remove if not needed
-    Thread* runningThread;
-    Thread* terminateThread = nullptr;
-    int quantumLength;
+std::vector<Thread*> readyThreads; // todo check better option than vector
+std::vector<Thread*> blockedThreads;
+std::vector<Thread*> sleepingThreads; // todo remove if not needed
+Thread* runningThread;
+Thread* terminateThread = nullptr;
+int quantumLength;
 
-    void wakeupSleepingThreads() {
-        for (int i = 0; i < sleepingThreads.size(); ++i) {
-            (*sleepingThreads[i]).decreaseSleepingCountdown();
-            if ((*sleepingThreads[i]).getSleepingCountdown() == 0) {
-                (*sleepingThreads[i]).setStatus(Ready);
-                readyThreads.push_back(sleepingThreads[i]);
-                sleepingThreads.erase(sleepingThreads.begin() + i);
-            }
+void wakeupSleepingThreads() {
+    for (int i = 0; i < sleepingThreads.size(); ++i) {
+        (*sleepingThreads[i]).decreaseSleepingCountdown();
+        if ((*sleepingThreads[i]).getSleepingCountdown() == 0) {
+            (*sleepingThreads[i]).setStatus(Ready);
+            readyThreads.push_back(sleepingThreads[i]);
+            sleepingThreads.erase(sleepingThreads.begin() + i);
         }
     }
+}
 
-    // the scheduler mechanics
-    void timer_handler(int sig)
-    {
-        // ignore SIGVTALRM
+// the scheduler mechanics
+void timer_handler(int sig)
+{
+    // ignore SIGVTALRM
 
-        sigaction sa_ign;
-        sa_ign.sa_handler = SIG_IGN;
-        sigaction(SIGVTALRM, &sa_ign, nullptr);
+    sigaction sa_ign;
+    sa_ign.sa_handler = SIG_IGN;
+    sigaction(SIGVTALRM, &sa_ign, nullptr);
 //            sigset_t set; // todo what pending does
 //            sigemptyset(&set);
 //            sigaddset(&set, SIGVTALRM);
 //            sigprocmask(SIG_SETMASK, &set, NULL);
-        //        signal(SIGVTALRM, SIG_IGN);
+    //        signal(SIGVTALRM, SIG_IGN);
 
-        generalQuantaCounter += 1;
-        runningThread->quantaCounterUp();
+    generalQuantaCounter += 1;
+    runningThread->quantaCounterUp();
 
-        ////////////////////////
-        /// Round Robin alg. ///
-        ////////////////////////
+    ////////////////////////
+    /// Round Robin alg. ///
+    ////////////////////////
 
-        if (terminateThread != nullptr){
-            // todo terminate the thread
-        }
+    if (terminateThread != nullptr){
+        // todo terminate the thread
+    }
 
-        // add the threads that finished sleeping to ready vector
-        wakeupSleepingThreads();
+    // add the threads that finished sleeping to ready vector
+    wakeupSleepingThreads();
 
 
-        if (runningThread->getStatus() == Running){
-            runningThread->setStatus(Ready);
-            readyThreads.insert(readyThreads.begin(), runningThread);
-        }
+    if (runningThread->getStatus() == Running){
+        runningThread->setStatus(Ready);
+        readyThreads.insert(readyThreads.begin(), runningThread);
+    }
 
 
 //        // if the running thread has blocked itself, add it to blocked vector
@@ -134,27 +133,30 @@ namespace uthreads_utils {
 //                break;
 //        }
 
-        // first thread in ready vector become running
-        runningThread = readyThreads.back();
-        runningThread->setStatus(Ready);
-        readyThreads.pop_back();
+    // first thread in ready vector become running
+    runningThread = readyThreads.back();
+    runningThread->setStatus(Ready);
+    readyThreads.pop_back();
 
-        // unblock SIGVTALRM
-        sa_ign.sa_handler = SIG_DFL;
-        sigaction(SIGVTALRM, &sa_ign, nullptr);
+    // unblock SIGVTALRM
+    sa_ign.sa_handler = SIG_DFL;
+    sigaction(SIGVTALRM, &sa_ign, nullptr);
 //        signal(SIGVTALRM, SIG_DFL);
 
-        int ret_val = sigsetjmp(runningThread->env, 1);
+    int ret_val = sigsetjmp(runningThread->env, 1);
 
-        // reset the timer
-        timer.it_value.tv_usec = quantumLength;
+    // reset the timer
+    timer.it_value.tv_usec = quantumLength;
 
-        if (ret_val == 1) {
-            return;
-        }
-
-        siglongjmp((*readyThreads[0]).env, 1);
+    if (ret_val == 1) {
+        return;
     }
+
+    siglongjmp((*readyThreads[0]).env, 1);
+}
+
+namespace uthreads_utils { // todo remove
+
 }
 
 

@@ -1,6 +1,7 @@
-#include "uthreads.h"
+#include <iostream>
+//#include "uthreads.h"
 
-int main() {
-    uthread_init(1000);
-
+int main()
+{
+    std::cout << "hi" << std::endl;
 }
