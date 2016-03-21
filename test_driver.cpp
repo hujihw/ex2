@@ -17,7 +17,7 @@ void f (void)
     int i = 1;
     while(1)
     {
-        std::cout << "in func f" << std::endl;
+//        std::cout << "in func f" << std::endl; // todo remove
         if(i == uthread_get_quantums(tid))
         {
             std::cout << "f" << tid << " Quanta:" <<  i << std::endl;
@@ -38,7 +38,7 @@ void g (void)
     int i = 1;
     while(1)
     {
-        std::cout << "in func g" << std::endl;
+//        std::cout << "in func g" << std::endl; // todo remove
         if(i == uthread_get_quantums(tid))
         {
             std::cout << "g" << tid << " Quanta:" <<  i << std::endl;

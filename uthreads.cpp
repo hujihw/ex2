@@ -51,9 +51,7 @@ address_t translate_address(address_t addr)
 
 #endif
 
-enum status_t {Ready, Blocked, Sleeping, Running};
-// todo move other
-                                                   // declerations here?
+enum status_t {Ready, Blocked, Sleeping, Running}; // todo move other declerations here?
 
 ////////////////////
 /// class Thread ///
@@ -64,9 +62,9 @@ class Thread {
 //    using namespace uthreads_utils;
 
 public:
-    sigjmp_buf env;
-    Thread(void (*entryPoint)(void), const unsigned int id);
+    Thread(void (*entry_point)(), const unsigned int id);
     ~Thread();
+    sigjmp_buf env;
     void quantaCounterUp();
     void setStatus(status_t new_status);
     const status_t getStatus() const;
@@ -80,9 +78,9 @@ private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
-    void (*entry_point)();
     unsigned int quantaCounter = 1;
     char *stack;
+    void (*entry_point); // todo remove
 };
 
 //////////////////////
@@ -139,6 +137,7 @@ void unBlockSigvtalrm(){
 // ignore SIGVTALRM
 void ignoreSigvtalrm() {
     sig_handler.sa_handler = SIG_IGN;
+    sig_handler.sa_flags = 0;
     if (sigaction(SIGVTALRM, &sig_handler, nullptr)){
         std::cerr << "system error: sigaction failed with errno: " <<
         errno << std::endl;
@@ -149,6 +148,7 @@ void ignoreSigvtalrm() {
 // un ignore SIGVTALRM
 void unIgnoreSigvtalrm() {
     sig_handler.sa_handler = timer_handler;
+    sig_handler.sa_flags = 0;
     if (sigaction(SIGVTALRM, &sig_handler, nullptr)){
         std::cerr << "system error: sigaction failed with errno: " <<
         errno << std::endl;
@@ -158,9 +158,7 @@ void unIgnoreSigvtalrm() {
 
 void timer_handler(int sig) {
     ignoreSigvtalrm();
-
-    std::cout << "Timer Handler, thread no. " << runningThread->getId() <<
-            std::endl; // todo remove
+    int previousRunningThread = runningThread->getId();
 
     generalQuantaCounter += 1;
     runningThread->quantaCounterUp();
@@ -169,20 +167,14 @@ void timer_handler(int sig) {
     /// Round Robin alg. ///
     ////////////////////////
 
-    if (terminateThread != nullptr){
-        uthread_terminate(terminateThread->getId());
-    }
-
     // add the threads that finished sleeping to ready vector
     wakeupSleepingThreads();
 
-
     if (runningThread->getStatus() == Running){
-        std::cout << "running thread added to readyThreads" << std::endl; //
-        // todo dbg
         runningThread->setStatus(Ready);
         readyThreads.insert(readyThreads.begin(), runningThread);
     }
+//    int ret_val = sigsetjmp(runningThread->env, 1);
 
     if (readyThreads.size() >= 1)
     {
@@ -191,18 +183,32 @@ void timer_handler(int sig) {
         runningThread->setStatus(Running);
         readyThreads.pop_back();
 
+        // terminate the thread that needs termination
+        if (terminateThread != nullptr){
+            int terminate = terminateThread->getId();
+            terminateThread = nullptr;
+            uthread_terminate(terminate);
+        }
+
         unIgnoreSigvtalrm();
 
-        int ret_val = sigsetjmp(runningThread->env, 1);
+        if (threads[previousRunningThread] != nullptr){
+
+            // instead of using ret_val
+            if (sigsetjmp(threads[previousRunningThread]->env, 1)){
+                setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+                return;
+            }
+        }
+
+
+//        int ret_val = sigsetjmp(runningThread->env, 1); // todo remove
 
         // reset the timer
         setitimer(ITIMER_VIRTUAL, &timer, nullptr);
-
-        if (ret_val == 1) {
-            return;
-        }
-
-//        siglongjmp((*readyThreads[0]).env, 1);
+//        if (ret_val == 1) { // todo remove
+//            return;
+//        }
         siglongjmp(runningThread->env, 1);
     } else {
         unIgnoreSigvtalrm();
@@ -233,9 +239,18 @@ namespace uthreads_utils { // todo remove
 /// Thread Implementations ///
 //////////////////////////////
 
-Thread::Thread(void (*entryPoint)(void), const unsigned int id): id(id),
-                                 entry_point(entryPoint), status(Ready) {
-    stack = new char[STACK_SIZE];
+Thread::Thread(void (*entry_point)(), const unsigned int id) {
+    Thread::id = id;
+    Thread::status = Ready;
+    Thread::stack = new char[STACK_SIZE];
+
+    address_t sp, pc;
+    sp = (address_t)stack + STACK_SIZE - sizeof(address_t);
+    pc = (address_t)entry_point;
+    sigsetjmp(this->env, 1);
+    (this->env->__jmpbuf)[JB_SP] = translate_address(sp);
+    (this->env->__jmpbuf)[JB_PC] = translate_address(pc);
+    sigemptyset(&(this->env->__saved_mask));
 }
 
 Thread::~Thread() {
@@ -447,8 +462,6 @@ int uthread_sleep(int num_quantums) {
     return 0;
 }
 
-
-
 int uthread_get_time_until_wakeup(int tid) {
 
     // if the tid is not legal the return -1
@@ -491,9 +504,7 @@ int uthread_get_quantums(int tid) {
     }
 }
 
-
 // todo when does terminate return -1?
-// todo any more allocated memory needs to be free?
 int uthread_terminate(int tid) {
     // if id is of the running thread, change status to Terminate and
     if (tid == MAIN_THREAD) {
@@ -546,6 +557,7 @@ int uthread_terminate(int tid) {
         }
         // delete the thread object after all of it's pointers were removed
         delete threads[tid];
+        threads[tid] = nullptr;
 
         unBlockSigvtalrm();
         return 0;
