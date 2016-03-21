@@ -51,19 +51,21 @@ address_t translate_address(address_t addr)
 
 #endif
 
-enum status_t {Ready, Blocked, Sleeping, Running}; // todo move other
+enum status_t {Ready, Blocked, Sleeping, Running};
+// todo move other
                                                    // declerations here?
 
 ////////////////////
 /// class Thread ///
 ////////////////////
 
+
 class Thread {
 //    using namespace uthreads_utils;
 
 public:
     sigjmp_buf env;
-    Thread(void *entryPoint, const unsigned int id);
+    Thread(void (*entryPoint)(void), const unsigned int id);
     ~Thread();
     void quantaCounterUp();
     void setStatus(status_t new_status);
@@ -71,15 +73,14 @@ public:
     unsigned int getId() const;
     unsigned int getQuantaCounter() const;
     int getSleepingCountdown() const;
-    void setSleepingCountdown(int sleepingCountdown);
+    void setSleepingCountdown(int sleepingCountdown); // todo remove
     void decreaseSleepingCountdown();
-
 
 private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
-    void *entry_point;
+    void (*entry_point)();
     unsigned int quantaCounter = 1;
     char *stack;
 };
@@ -92,7 +93,6 @@ itimerval timer;
 struct sigaction sig_handler;
 unsigned int generalQuantaCounter = 1;
 Thread *threads[MAX_THREAD_NUM];
-//    sigjmp_buf env[MAX_THREAD_NUM]; todo remove
 std::vector<Thread*> readyThreads; // todo check better option than vector
 std::vector<Thread*> blockedThreads;
 std::vector<Thread*> sleepingThreads; // todo remove if not needed
@@ -159,7 +159,8 @@ void unIgnoreSigvtalrm() {
 void timer_handler(int sig) {
     ignoreSigvtalrm();
 
-    std::cout << "Timer Handler" << std::endl; // todo remove
+    std::cout << "Timer Handler, thread no. " << runningThread->getId() <<
+            std::endl; // todo remove
 
     generalQuantaCounter += 1;
     runningThread->quantaCounterUp();
@@ -169,7 +170,7 @@ void timer_handler(int sig) {
     ////////////////////////
 
     if (terminateThread != nullptr){
-        // todo terminate the thread
+        uthread_terminate(terminateThread->getId());
     }
 
     // add the threads that finished sleeping to ready vector
@@ -177,36 +178,17 @@ void timer_handler(int sig) {
 
 
     if (runningThread->getStatus() == Running){
+        std::cout << "running thread added to readyThreads" << std::endl; //
+        // todo dbg
         runningThread->setStatus(Ready);
         readyThreads.insert(readyThreads.begin(), runningThread);
     }
-
-
-//        // if the running thread has blocked itself, add it to blocked vector
-//        switch (runningThread->getStatus()) {
-//            case Running:
-//
-//                break;
-//
-//            case Blocked:
-//                blockedThreads.insert(blockedThreads.begin(), runningThread);
-//                break;
-//
-//            case Sleeping:
-//                sleepingThreads.insert(sleepingThreads.begin(), runningThread);
-//                break;
-//
-//            case Ready:
-//                std::cerr << "Error: Running thread is in ready Status while "
-//                                 "running!" << std::endl; // todo remove
-//                break;
-//        }
 
     if (readyThreads.size() >= 1)
     {
         // first thread in ready vector become running
         runningThread = readyThreads.back();
-        runningThread->setStatus(Ready);
+        runningThread->setStatus(Running);
         readyThreads.pop_back();
 
         unIgnoreSigvtalrm();
@@ -220,7 +202,8 @@ void timer_handler(int sig) {
             return;
         }
 
-        siglongjmp((*readyThreads[0]).env, 1);
+//        siglongjmp((*readyThreads[0]).env, 1);
+        siglongjmp(runningThread->env, 1);
     } else {
         unIgnoreSigvtalrm();
 
@@ -250,8 +233,8 @@ namespace uthreads_utils { // todo remove
 /// Thread Implementations ///
 //////////////////////////////
 
-Thread::Thread(void *entryPoint, const unsigned int id): id(id), entry_point
-        (entryPoint), status(Ready) {
+Thread::Thread(void (*entryPoint)(void), const unsigned int id): id(id),
+                                 entry_point(entryPoint), status(Ready) {
     stack = new char[STACK_SIZE];
 }
 
@@ -364,6 +347,7 @@ int uthread_init(int quantum_usecs) {
 
     threads[0] = new Thread(nullptr, MAIN_THREAD);
     runningThread = threads[0];
+    runningThread->setStatus(Running);
     return 0;
 }
 
@@ -377,7 +361,7 @@ int uthread_spawn(void (*f)(void)) {
     // verify the array of threads is not full, and find the minimal id to spawn
     for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr) {
-            threads[i] = new Thread(&f, i);
+            threads[i] = new Thread(f, i);
             readyThreads.insert(readyThreads.begin(), threads[i]);
             sigprocmask(SIG_UNBLOCK, &set, NULL);
             return i;
