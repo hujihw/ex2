@@ -61,6 +61,7 @@ int main(void)
         std::cout << "Init Quantum num is: " << uthread_get_total_quantums() << std::endl;
         while(1)
         {
+            std::cout << "i = " << i << std::endl; // todo dbg
             if(i == uthread_get_quantums(tid))
             {
                 std::cout << "m" << tid << " Quanta:" <<  i << std::endl;

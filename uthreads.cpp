@@ -115,10 +115,10 @@ void wakeupSleepingThreads() {
 void timer_handler(int sig)
 {
     // ignore SIGVTALRM
+    sig_handler.sa_handler = SIG_IGN;
+    sigaction(SIGVTALRM, &sig_handler, nullptr);
+    std::cout << "Timer Handler" << std::endl; // todo remove
 
-    struct sigaction sa_ign;
-    sa_ign.sa_handler = SIG_IGN;
-    sigaction(SIGVTALRM, &sa_ign, nullptr);
 //            sigset_t set; // todo what pending does
 //            sigemptyset(&set);
 //            sigaddset(&set, SIGVTALRM);
@@ -173,15 +173,14 @@ void timer_handler(int sig)
         runningThread->setStatus(Ready);
         readyThreads.pop_back();
 
-        // unblock SIGVTALRM
-        sa_ign.sa_handler = SIG_DFL;
-        sigaction(SIGVTALRM, &sa_ign, nullptr);
-//        signal(SIGVTALRM, SIG_DFL);
+        // unignore SIGVTALRM
+        sig_handler.sa_handler = timer_handler;
+        sigaction(SIGVTALRM, &sig_handler, nullptr);
 
         int ret_val = sigsetjmp(runningThread->env, 1);
 
         // reset the timer
-        timer.it_value.tv_usec = quantumLength;
+        setitimer(ITIMER_VIRTUAL, &timer, nullptr);
 
         if (ret_val == 1) {
             return;
@@ -189,7 +188,12 @@ void timer_handler(int sig)
 
         siglongjmp((*readyThreads[0]).env, 1);
     } else {
-        // no need to update running thread
+        // unblock SIGVTALRM
+        sig_handler.sa_handler = timer_handler;
+        sigaction(SIGVTALRM, &sig_handler, nullptr);
+
+        // reset timer
+        setitimer(ITIMER_VIRTUAL, &timer, nullptr);
     }
 }
 
@@ -250,7 +254,7 @@ int Thread::getSleepingCountdown() const {
 /// Library Functions Implementations ///
 /////////////////////////////////////////
 
-using namespace uthreads_utils;
+using namespace uthreads_utils; //todo remove if needed
 
 // helper function that checks that the id of the thread exists and is not the
 // main thread
@@ -311,17 +315,27 @@ int uthread_init(int quantum_usecs) {
 }
 
 int uthread_spawn(void (*f)(void)) {
+
+    // block SIGVTALRM
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGVTALRM);
+    sigprocmask(SIG_SETMASK, &set, NULL);
+
     // verify the array of threads is not full, and find the minimal id to spawn
     for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr) {
             threads[i] = new Thread(&f, i);
             readyThreads.insert(readyThreads.begin(), threads[i]);
+            sigprocmask(SIG_UNBLOCK, &set, NULL);
             return i;
         }
-        // no room for another thread.
-        return -1;
     }
+    sigprocmask(SIG_UNBLOCK, &set, NULL);
+    // no room for another thread.
+    return -1;
 }
+
 int uthread_block(int tid) {
     if (checkTidLegallity(tid)) {
         return -1;
