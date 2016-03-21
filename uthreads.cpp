@@ -50,13 +50,45 @@ address_t translate_address(address_t addr)
 
 #endif
 
+enum status_t {Ready, Blocked, Sleeping, Running}; // todo move other
+                                                   // declerations here?
+
+////////////////////
+/// class Thread ///
+////////////////////
+
+class Thread {
+//    using namespace uthreads_utils;
+
+public:
+    sigjmp_buf env;
+    Thread(void *entryPoint, const unsigned int id);
+    ~Thread();
+    void quantaCounterUp();
+    void setStatus(status_t new_status);
+    const status_t getStatus() const;
+    unsigned int getId() const;
+    unsigned int getQuantaCounter() const;
+    int getSleepingCountdown() const;
+    void setSleepingCountdown(int sleepingCountdown);
+    void decreaseSleepingCountdown();
+
+
+private:
+    int sleepingCountdown;
+    unsigned int id;
+    status_t status;
+    void *entry_point;
+    unsigned int quantaCounter = 1;
+    char *stack;
+};
+
 //////////////////////
 /// Uthreads Utils ///
 //////////////////////
 
 itimerval timer;
-sigaction sig_handler;
-enum status_t {Ready, Blocked, Sleeping, Running};
+struct sigaction sig_handler;
 unsigned int generalQuantaCounter = 1;
 Thread *threads[MAX_THREAD_NUM];
 //    sigjmp_buf env[MAX_THREAD_NUM]; todo remove
@@ -83,7 +115,7 @@ void timer_handler(int sig)
 {
     // ignore SIGVTALRM
 
-    sigaction sa_ign;
+    struct sigaction sa_ign;
     sa_ign.sa_handler = SIG_IGN;
     sigaction(SIGVTALRM, &sa_ign, nullptr);
 //            sigset_t set; // todo what pending does
@@ -159,37 +191,6 @@ namespace uthreads_utils { // todo remove
 
 }
 
-
-
-////////////////////
-/// class Thread ///
-////////////////////
-
-class Thread {
-    using namespace uthreads_utils;
-
-public:
-    sigjmp_buf env;
-    Thread(void *entryPoint, const unsigned int id);
-    ~Thread();
-    void quantaCounterUp();
-    void setStatus(status_t new_status);
-    const status_t getStatus() const;
-    unsigned int getId() const;
-    unsigned int getQuantaCounter() const;
-    int getSleepingCountdown() const;
-    void setSleepingCountdown(int sleepingCountdown);
-    void decreaseSleepingCountdown();
-
-
-private:
-    int sleepingCountdown;
-    unsigned int id;
-    status_t status;
-    void *entry_point;
-    unsigned int quantaCounter = 1;
-    char *stack;
-};
 
 //////////////////////////////
 /// Thread Implementations ///
@@ -306,7 +307,7 @@ int uthread_spawn(void (*f)(void)) {
     // verify the array of threads is not full, and find the minimal id to spawn
     for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr) {
-            threads[i] = new Thread(f, i);
+            threads[i] = new Thread(&f, i);
             readyThreads.insert(readyThreads.begin(), threads[i]);
             return i;
         }
