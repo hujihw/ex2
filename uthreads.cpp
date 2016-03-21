@@ -7,6 +7,7 @@
 #include <iostream>
 #include <list>
 #include "uthreads.h"
+#include <unistd.h>
 
 #define MAIN_THREAD 0
 
@@ -165,26 +166,31 @@ void timer_handler(int sig)
 //                break;
 //        }
 
-    // first thread in ready vector become running
-    runningThread = readyThreads.back();
-    runningThread->setStatus(Ready);
-    readyThreads.pop_back();
+    if (readyThreads.size() >= 1)
+    {
+        // first thread in ready vector become running
+        runningThread = readyThreads.back();
+        runningThread->setStatus(Ready);
+        readyThreads.pop_back();
 
-    // unblock SIGVTALRM
-    sa_ign.sa_handler = SIG_DFL;
-    sigaction(SIGVTALRM, &sa_ign, nullptr);
+        // unblock SIGVTALRM
+        sa_ign.sa_handler = SIG_DFL;
+        sigaction(SIGVTALRM, &sa_ign, nullptr);
 //        signal(SIGVTALRM, SIG_DFL);
 
-    int ret_val = sigsetjmp(runningThread->env, 1);
+        int ret_val = sigsetjmp(runningThread->env, 1);
 
-    // reset the timer
-    timer.it_value.tv_usec = quantumLength;
+        // reset the timer
+        timer.it_value.tv_usec = quantumLength;
 
-    if (ret_val == 1) {
-        return;
+        if (ret_val == 1) {
+            return;
+        }
+
+        siglongjmp((*readyThreads[0]).env, 1);
+    } else {
+        // no need to update running thread
     }
-
-    siglongjmp((*readyThreads[0]).env, 1);
 }
 
 namespace uthreads_utils { // todo remove
@@ -300,6 +306,7 @@ int uthread_init(int quantum_usecs) {
     }
 
     threads[0] = new Thread(nullptr, MAIN_THREAD);
+    runningThread = threads[0];
     return 0;
 }
 
@@ -422,7 +429,9 @@ int uthread_get_quantums(int tid) {
     // if the thread is the running thread then the current quantum should be
     // included.
     if (tid == uthread_get_tid()) {
-        return (*threads[tid]).getQuantaCounter() + 1;
+//        int currQuantaPlusOne = (*threads[tid]).getQuantaCounter() + 1;
+//        return currQuantaPlusOne;
+        return (*threads[tid]).getQuantaCounter();
     }
     else {
         return (*threads[tid]).getQuantaCounter();

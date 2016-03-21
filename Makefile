@@ -3,7 +3,7 @@ CXXFLAGS=--std=c++11 -I. -Wall
 
 .PHONY: all tar clean
 
-all: tar libuthreads.a
+all: libuthreads.a
 
 uthreads.o: uthreads.cpp
 	$(CC) $(CXXFLAGS) -c -o $@ $^
