@@ -78,7 +78,7 @@ private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
-    unsigned int quantaCounter = 1;
+    unsigned int quantaCounter = 0;
     char *stack;
     void (*entry_point); // todo remove
 };
@@ -161,7 +161,6 @@ void timer_handler(int sig) {
     int previousRunningThread = runningThread->getId();
 
     generalQuantaCounter += 1;
-    runningThread->quantaCounterUp();
 
     ////////////////////////
     /// Round Robin alg. ///
@@ -182,6 +181,9 @@ void timer_handler(int sig) {
         runningThread = readyThreads.back();
         runningThread->setStatus(Running);
         readyThreads.pop_back();
+
+        //increment the quanta counter of the running thread
+        runningThread->quantaCounterUp();
 
         // terminate the thread that needs termination
         if (terminateThread != nullptr){
@@ -211,6 +213,10 @@ void timer_handler(int sig) {
 //        }
         siglongjmp(runningThread->env, 1);
     } else {
+
+        //increment the quanta counter of the running thread
+        runningThread->quantaCounterUp();
+
         unIgnoreSigvtalrm();
 
         // reset timer
@@ -225,6 +231,16 @@ void blockOrIgnoreSigvtalrm(int tid){
         ignoreSigvtalrm();
     } else {
         blockSigvtalrm();
+    }
+}
+
+// if the threads blocks itself then unignore SIGVTALRM, else unblock SIGVTALRM
+void unBlockOrUnIgnoreSigvtalrm(int tid){
+
+    if (tid == uthread_get_tid()){
+        unIgnoreSigvtalrm();
+    } else {
+        unBlockSigvtalrm();
     }
 }
 
@@ -363,26 +379,28 @@ int uthread_init(int quantum_usecs) {
     threads[0] = new Thread(nullptr, MAIN_THREAD);
     runningThread = threads[0];
     runningThread->setStatus(Running);
+
+    //increment the quanta counter of the running thread
+    runningThread->quantaCounterUp();
+
     return 0;
 }
 
 int uthread_spawn(void (*f)(void)) {
 
     // block SIGVTALRM
-    sigemptyset(&set);
-    sigaddset(&set, SIGVTALRM);
-    sigprocmask(SIG_SETMASK, &set, NULL);
+    blockSigvtalrm();
 
     // verify the array of threads is not full, and find the minimal id to spawn
     for (unsigned int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr) {
             threads[i] = new Thread(f, i);
             readyThreads.insert(readyThreads.begin(), threads[i]);
-            sigprocmask(SIG_UNBLOCK, &set, NULL);
+            unBlockSigvtalrm();
             return i;
         }
     }
-    sigprocmask(SIG_UNBLOCK, &set, NULL);
+    unBlockSigvtalrm();
     // no room for another thread.
     return -1;
 }
@@ -392,11 +410,15 @@ int uthread_block(int tid) {
     blockOrIgnoreSigvtalrm(tid);
 
     if (checkTidLegallity(tid)) {
+
+        unBlockOrUnIgnoreSigvtalrm(tid);
+
         return -1;
     }
 
     if (threads[tid]->getStatus() == Blocked ||
         threads[tid]->getStatus() == Sleeping) {
+        unBlockOrUnIgnoreSigvtalrm; //todo debug
         return 0;
     }
 
@@ -425,6 +447,7 @@ int uthread_resume(int tid) {
 
     if (threads[tid]->getStatus() != Blocked) {
         if (checkTidExists(tid)) {
+            unBlockSigvtalrm();
             return -1;
         }
 
@@ -445,20 +468,23 @@ int uthread_resume(int tid) {
 int uthread_sleep(int num_quantums) {
     ignoreSigvtalrm();
 
-    if (num_quantums <= 0) {
+    if (num_quantums < 0) {
         std::cerr << "thread library error: parameter num_quantums must be a "
                 "positive number" << std::endl;
+        unIgnoreSigvtalrm();
         return -1;
     }
     if (runningThread->getId() == 0) {
         std::cerr << "thread library error: the main thread can't be put to "
                 "sleep" << std::endl;
+        unIgnoreSigvtalrm();
         return -1;
     }
 
     runningThread->setStatus(Sleeping);
     blockedThreads.insert(blockedThreads.begin(), runningThread);
     timer_handler(0); //finish the quanta
+    unIgnoreSigvtalrm();
     return 0;
 }
 
@@ -494,18 +520,20 @@ int uthread_get_quantums(int tid) {
 
     // if the thread is the running thread then the current quantum should be
     // included.
-    if (tid == uthread_get_tid()) {
-//        int currQuantaPlusOne = (*threads[tid]).getQuantaCounter() + 1;
-//        return currQuantaPlusOne; // todo debug
-        return (*threads[tid]).getQuantaCounter();
-    }
-    else {
-        return (*threads[tid]).getQuantaCounter();
-    }
+//    if (tid == uthread_get_tid()) {
+//        return threads[tid]->getQuantaCounter() + 1; // todo remove
+//        return threads[tid]->getQuantaCounter();
+//    }
+//    else {
+    return threads[tid]->getQuantaCounter();
+//    }
 }
 
-// todo when does terminate return -1?
 int uthread_terminate(int tid) {
+    if (checkTidExists(tid)){
+        return -1;
+    }
+
     // if id is of the running thread, change status to Terminate and
     if (tid == MAIN_THREAD) {
         ignoreSigvtalrm();
