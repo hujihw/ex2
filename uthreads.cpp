@@ -78,7 +78,7 @@ private:
     int sleepingCountdown;
     unsigned int id;
     status_t status;
-    unsigned int quantaCounter = 0;
+    unsigned int quantaCounter = 1;
     char *stack;
     void (*entry_point); // todo remove
 };
@@ -161,6 +161,7 @@ void timer_handler(int sig) {
     int previousRunningThread = runningThread->getId();
 
     generalQuantaCounter += 1;
+    runningThread->quantaCounterUp();
 
     ////////////////////////
     /// Round Robin alg. ///
@@ -181,9 +182,6 @@ void timer_handler(int sig) {
         runningThread = readyThreads.back();
         runningThread->setStatus(Running);
         readyThreads.pop_back();
-
-        //increment the quanta counter of the running thread
-        runningThread->quantaCounterUp();
 
         // terminate the thread that needs termination
         if (terminateThread != nullptr){
@@ -213,10 +211,6 @@ void timer_handler(int sig) {
 //        }
         siglongjmp(runningThread->env, 1);
     } else {
-
-        //increment the quanta counter of the running thread
-        runningThread->quantaCounterUp();
-
         unIgnoreSigvtalrm();
 
         // reset timer
@@ -379,10 +373,6 @@ int uthread_init(int quantum_usecs) {
     threads[0] = new Thread(nullptr, MAIN_THREAD);
     runningThread = threads[0];
     runningThread->setStatus(Running);
-
-    //increment the quanta counter of the running thread
-    runningThread->quantaCounterUp();
-
     return 0;
 }
 
@@ -445,20 +435,23 @@ int uthread_block(int tid) {
 int uthread_resume(int tid) {
     blockSigvtalrm();
 
+    if (checkTidExists(tid)){
+        unBlockSigvtalrm();
+        return -1;
+    }
+
     if (threads[tid]->getStatus() != Blocked) {
-        if (checkTidExists(tid)) {
-            unBlockSigvtalrm();
-            return -1;
-        }
+        unBlockSigvtalrm();
+        return -1;
+    }
 
-        threads[tid]->setStatus(Ready);
+    threads[tid]->setStatus(Ready);
 
-        for (int i = 0; i < blockedThreads.size(); i++) {
-            if (blockedThreads[i]->getId() == tid) {
-                blockedThreads.erase(blockedThreads.begin() + i);
-                readyThreads.insert(blockedThreads.begin(), threads[tid]);
-                break;
-            }
+    for (int i = 0; i < blockedThreads.size(); i++) {
+        if (blockedThreads[i]->getId() == tid) {
+            readyThreads.insert(readyThreads.begin(), threads[tid]);
+            blockedThreads.erase(blockedThreads.begin() + i);
+            break;
         }
     }
     unBlockSigvtalrm();
@@ -468,7 +461,7 @@ int uthread_resume(int tid) {
 int uthread_sleep(int num_quantums) {
     ignoreSigvtalrm();
 
-    if (num_quantums < 0) {
+    if (num_quantums < 0) { //todo check about including zero
         std::cerr << "thread library error: parameter num_quantums must be a "
                 "positive number" << std::endl;
         unIgnoreSigvtalrm();
