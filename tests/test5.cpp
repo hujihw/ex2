@@ -1,5 +1,5 @@
 
-#include "uthreads.h"
+#include "../uthreads.h"
 #include <iostream>
 #include <fstream>
 

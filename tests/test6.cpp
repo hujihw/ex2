@@ -7,7 +7,7 @@
 #include <deque>
 #include <list>
 #include <assert.h>
-#include "uthreads.h"
+#include "../uthreads.h"
 //#include "libuthreads.a"
 #include <iostream>
 #include <fstream>

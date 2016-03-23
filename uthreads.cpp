@@ -68,7 +68,7 @@ public:
     void quantaCounterUp();
     void setStatus(status_t new_status);
     const status_t getStatus() const;
-    unsigned int getId() const;
+    int getId() const;
     unsigned int getQuantaCounter() const;
     int getSleepingCountdown() const;
     void setSleepingCountdown(int sleepingCountdown); // todo remove
@@ -290,7 +290,7 @@ unsigned int Thread::getQuantaCounter() const {
     return quantaCounter;
 }
 
-unsigned int Thread::getId() const {
+int Thread::getId() const {
     return id;
 }
 
@@ -440,7 +440,7 @@ int uthread_block(int tid) {
         timer_handler(0); //finish the quanta
 
     } else { // the thread is in the ready vector
-        for (int i = 0; i < readyThreads.size(); i++) {
+        for (unsigned int i = 0; i < readyThreads.size(); i++) {
             if (readyThreads[i]->getId() == tid) {
                 blockedThreads.insert(blockedThreads.begin(), threads[tid]);
                 readyThreads.erase(readyThreads.begin() + i);
@@ -467,7 +467,7 @@ int uthread_resume(int tid) {
 
     threads[tid]->setStatus(Ready);
 
-    for (int i = 0; i < blockedThreads.size(); i++) {
+    for (unsigned int i = 0; i < blockedThreads.size(); i++) {
         if (blockedThreads[i]->getId() == tid) {
             readyThreads.insert(readyThreads.begin(), threads[tid]);
             blockedThreads.erase(blockedThreads.begin() + i);
@@ -571,7 +571,7 @@ int uthread_terminate(int tid) {
         // remove pointers to the thread object from blocked/sleeping/ready list
         switch (threads[tid]->getStatus()) {
             case Ready:
-                for (int i = 0; i < readyThreads.size(); ++i) {
+                for (unsigned int i = 0; i < readyThreads.size(); ++i) {
                     if (readyThreads[i]->getId() == tid) {
                         readyThreads.erase(readyThreads.begin() + i);
                     }
@@ -592,7 +592,7 @@ int uthread_terminate(int tid) {
                 break;
 
             case Blocked:
-                for (int i = 0; i < blockedThreads.size(); ++i) {
+                for (unsigned int i = 0; i < blockedThreads.size(); ++i) {
                     if (blockedThreads[i]->getId() == tid) {
                         blockedThreads.erase(blockedThreads.begin() + i);
                     }
