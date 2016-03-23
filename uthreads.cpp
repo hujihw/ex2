@@ -541,7 +541,8 @@ int uthread_terminate(int tid) {
                 break;
 
             case Sleeping:
-                for (std::vector<Thread*>::iterator it = sleepingThreads.begin() ; it != sleepingThreads.end(); it++) {
+                for (std::vector<Thread*>::iterator it = sleepingThreads.begin()
+                        ; it != sleepingThreads.end(); it++) {
                     if ((*it)->getId()){
                         sleepingThreads.erase(it);
                     }

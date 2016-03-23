@@ -1,4 +1,4 @@
-﻿﻿omri.kaplan, etzion.asaf
+﻿omri.kaplan, etzion.asaf
 Omri Kaplan (20043895), Asaf Etzion (20020272)
 EX: 2
 
@@ -37,8 +37,11 @@ execution, what triggered them and who should handle them. In your answer
 refer to keyboard, OS, shell (in which you type the kill command) and the
 application you just killed (2.5 pts).
 
-The OS is waiting for HW interrupt from the keyboard, which translate to the
-// todo finish answer
+The OS gets HW interrupt from the keyboard. A special handler in the OS knows
+the shell is waiting for the keyboard input, and sent them to the shell. When
+executing the "kill" command in the shell, the "kill" process, sends
+SIGTERM to the running process (in this case Shotwell) using it's pid. The
+process get the signal and try to release resources and terminates.
 
 
 3. What is the difference between ‘real’ and ‘virtual’ time? Give one
@@ -49,6 +52,12 @@ running. If the system is working for X time, real time will indicate that.
 Virtual time is relative to a process. It is the time passed while the
 process is running. When the process is preempted by the OS, this time
 pauses until the next time it will run again.
+Examples: Use real time if you want to make an alarm clock that makes sound
+after waiting a certain amount of time. That way you will get the alarm after
+this amount of time passed in the real world.
+Use virtual time if you want a certain process to perform a task for a
+predefined amount of time. That way the time will count down only when the
+process is executing.
 
 
 4. a. When creating a new process using fork command, which of the following
