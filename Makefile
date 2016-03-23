@@ -16,4 +16,4 @@ sanity: uthreads.h uthreads.cpp Makefile README
 	tar cvf ex2.tar $^
 
 clean:
-	rm uthreads.o ex2.tar libuthreads.a
+	rm -f uthreads.o ex2.tar libuthreads.a

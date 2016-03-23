@@ -1,9 +1,10 @@
-omri.kaplan, etzion.asaf
-omri kaplan (20043895), asaf etzion (20020272)
+﻿omri.kaplan, etzion.asaf
+Omri Kaplan (20043895), Asaf Etzion (20020272)
 EX: 2
 
 FILES:
 uthreads.cpp- the implementation of the user level threads library.
+uthreads.h- the header file of the library
 makefile- creates the uthreads library from the cpp file above, compresses to
           tar.
 README- this file.
