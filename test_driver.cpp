@@ -17,7 +17,6 @@ void f (void)
     int i = 1;
     while(1)
     {
-//        std::cout << "in func f" << std::endl; // todo remove
         if(i == uthread_get_quantums(tid))
         {
             std::cout << "f" << tid << " Quanta:" <<  i << std::endl;
@@ -38,7 +37,6 @@ void g (void)
     int i = 1;
     while(1)
     {
-//        std::cout << "in func g" << std::endl; // todo remove
         if(i == uthread_get_quantums(tid))
         {
             std::cout << "g" << tid << " Quanta:" <<  i << std::endl;
@@ -65,7 +63,6 @@ int main(void)
         std::cout << "Init Quantum num is: " << uthread_get_total_quantums() << std::endl;
         while(1)
         {
-//            std::cout << "i = " << i << std::endl; // todo dbg
             if(i == uthread_get_quantums(tid))
             {
                 std::cout << "m" << tid << " Quanta:" <<  i << std::endl;

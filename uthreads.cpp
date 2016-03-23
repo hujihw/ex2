@@ -51,7 +51,7 @@ address_t translate_address(address_t addr)
 
 #endif
 
-enum status_t {Ready, Blocked, Sleeping, Running}; // todo move other declerations here?
+enum status_t {Ready, Blocked, Sleeping, Running};
 
 ////////////////////
 /// class Thread ///
@@ -59,7 +59,6 @@ enum status_t {Ready, Blocked, Sleeping, Running}; // todo move other decleratio
 
 
 class Thread {
-//    using namespace uthreads_utils;
 
 public:
     Thread(void (*entry_point)(), const unsigned int id);
@@ -71,7 +70,7 @@ public:
     int getId() const;
     unsigned int getQuantaCounter() const;
     int getSleepingCountdown() const;
-    void setSleepingCountdown(int sleepingCountdown); // todo remove
+    void setSleepingCountdown(int sleepingCountdown);
     void decreaseSleepingCountdown();
 
 private:
@@ -80,7 +79,6 @@ private:
     status_t status;
     unsigned int quantaCounter = 0;
     char *stack;
-    void (*entry_point); // todo remove
 };
 
 //////////////////////
@@ -91,12 +89,11 @@ itimerval timer;
 struct sigaction sig_handler;
 unsigned int generalQuantaCounter = 1;
 Thread *threads[MAX_THREAD_NUM];
-std::vector<Thread*> readyThreads; // todo check better option than vector
+std::vector<Thread*> readyThreads;
 std::vector<Thread*> blockedThreads;
-std::vector<Thread*> sleepingThreads; // todo remove if not needed
+std::vector<Thread*> sleepingThreads;
 Thread* runningThread;
 Thread* terminateThread = nullptr;
-int quantumLength;
 sigset_t set; //the signal set for sigporcmask
 
 void timer_handler(int sig);
@@ -111,7 +108,7 @@ void wakeupSleepingThreads() {
         }
 
         (*it)->decreaseSleepingCountdown();
-        if ((*it)->getSleepingCountdown() == 0) { // todo magic number
+        if ((*it)->getSleepingCountdown() == 0) {
             (*it)->setStatus(Ready);
             readyThreads.insert(readyThreads.begin(), (*it));
             it = sleepingThreads.erase(it);
@@ -179,19 +176,10 @@ void timer_handler(int sig) {
     // add the threads that finished sleeping to ready vector
     wakeupSleepingThreads();
 
-//    if (threads[0]->getQuantaCounter() >= 11){
-//        std::cout << "thread 1 countdown: " << threads[1]->getSleepingCountdown() << std::endl; // todo remove
-//        std::cout << "thread 1 state: " << threads[1]->getStatus() << std::endl; // todo remove
-//        std::cout << "thread 2 countdown: " << threads[2]->getSleepingCountdown() << std::endl; // todo remove
-//        std::cout << "thread 2 state: " << threads[2]->getStatus() << std::endl; // todo remove
-//        std::cout << "thread no. " << sleepingThreads[i]->getId() << " has " << sleepingThreads[i]->getSleepingCountdown() << " q to sleep" << std::endl; //todo remove
-//    }
-
     if (runningThread->getStatus() == Running){
         runningThread->setStatus(Ready);
         readyThreads.insert(readyThreads.begin(), runningThread);
     }
-//    int ret_val = sigsetjmp(runningThread->env, 1);
 
     if (readyThreads.size() >= 1)
     {
@@ -219,14 +207,9 @@ void timer_handler(int sig) {
             }
         }
 
-
-//        int ret_val = sigsetjmp(runningThread->env, 1); // todo remove
-
         // reset the timer
         setitimer(ITIMER_VIRTUAL, &timer, nullptr);
-//        if (ret_val == 1) { // todo remove
-//            return;
-//        }
+
         siglongjmp(runningThread->env, 1);
     } else {
         runningThread->quantaCounterUp();
@@ -255,12 +238,6 @@ void unBlockOrUnIgnoreSigvtalrm(int tid){
     } else {
         unBlockSigvtalrm();
     }
-}
-
-
-
-namespace uthreads_utils { // todo remove
-
 }
 
 
@@ -325,8 +302,6 @@ int Thread::getSleepingCountdown() const {
 /// Library Functions Implementations ///
 /////////////////////////////////////////
 
-using namespace uthreads_utils; //todo remove if needed
-
 // helper function that checks that the id of the thread exists and is not the
 // main thread
 int checkTidLegallity(int tid){
@@ -354,9 +329,6 @@ int checkTidExists(int tid) {
 }
 
 int uthread_init(int quantum_usecs) {
-
-    // initialize the quantum length in micro seconds.
-    quantumLength = quantum_usecs;
 
     // check that parameter is positive
     if (quantum_usecs <= 0) {
@@ -428,7 +400,7 @@ int uthread_block(int tid) {
 
     if (threads[tid]->getStatus() == Blocked ||
         threads[tid]->getStatus() == Sleeping) {
-        unBlockOrUnIgnoreSigvtalrm(tid); //todo debug
+        unBlockOrUnIgnoreSigvtalrm(tid);
         return 0;
     }
 
@@ -481,7 +453,7 @@ int uthread_resume(int tid) {
 int uthread_sleep(int num_quantums) {
     ignoreSigvtalrm();
 
-    if (num_quantums < 0) { //todo check about including zero
+    if (num_quantums < 0) {
         std::cerr << "thread library error: parameter num_quantums must be a "
                 "positive number" << std::endl;
         unIgnoreSigvtalrm();
@@ -496,7 +468,6 @@ int uthread_sleep(int num_quantums) {
 
     runningThread->setStatus(Sleeping);
     runningThread->setSleepingCountdown(num_quantums);
-//    sleepingThreads.insert(sleepingThreads.begin(), runningThread); // todo remove
     sleepingThreads.push_back(runningThread);
     timer_handler(0); //finish the quanta
     unIgnoreSigvtalrm();
@@ -532,16 +503,7 @@ int uthread_get_quantums(int tid) {
     if (checkTidExists(tid)) {
         return -1;
     }
-
-    // if the thread is the running thread then the current quantum should be
-    // included.
-//    if (tid == uthread_get_tid()) {
-//        return threads[tid]->getQuantaCounter() + 1; // todo remove
-//        return threads[tid]->getQuantaCounter();
-//    }
-//    else {
     return threads[tid]->getQuantaCounter();
-//    }
 }
 
 int uthread_terminate(int tid) {
@@ -564,7 +526,7 @@ int uthread_terminate(int tid) {
         ignoreSigvtalrm();
 
         terminateThread = runningThread;
-        timer_handler(SIGVTALRM); // todo change signal
+        timer_handler(SIGVTALRM);
     } else {
         blockSigvtalrm();
 

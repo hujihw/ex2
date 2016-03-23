@@ -1,7 +1,7 @@
 CC=g++
 CXXFLAGS=--std=c++11 -I. -Wall
 
-.PHONY: all tar sanity clean
+.PHONY: tar sanity clean
 
 libuthreads.a: uthreads.o
 	ar rcs libuthreads.a uthreads.o

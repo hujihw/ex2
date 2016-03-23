@@ -1,0 +1,71 @@
+﻿﻿omri.kaplan, etzion.asaf
+Omri Kaplan (20043895), Asaf Etzion (20020272)
+EX: 2
+
+
+FILES:
+uthreads.cpp- the implementation of the user level threads library.
+uthreads.h- the header file of the library
+makefile- creates the uthreads library from the cpp file above, compresses to
+          tar.
+README- this file.
+
+
+REMARKS:
+
+
+Theoretical Questions:
+1. As discussed in class, Google’s Chrome browser creates new process for each
+tab. Would the same benefit have been achieved by creating a new kernel level
+thread for each tab? What are the advantages and disadvantages of creating new
+process (instead of kernel level thread)? (2.5 pts)
+
+When creating a process for each tab, we gain stability because if one tab
+crashes, the other tabs won’t necessarily be forced to end.
+Closing each tab is easier that way, because of there is no memory sharing.
+And there is no need to check if other tabs use the memory resources of the
+closing tab. Another aspect is security, when separating the tabs to
+different processes, we gain isolation in memory resources, thus
+strengthening the security of each tab from malicious acts.
+
+
+2. a. Open an application (for example, Shotwell in CS computers).
+Use ‘ps –A’ command and extract the application pid (process id).
+b. Open a Shell and type ‘kill pid’.
+c. Explain which interrupts and signals are involved during the command
+execution, what triggered them and who should handle them. In your answer
+refer to keyboard, OS, shell (in which you type the kill command) and the
+application you just killed (2.5 pts).
+
+The OS is waiting for HW interrupt from the keyboard, which translate to the
+// todo finish answer
+
+
+3. What is the difference between ‘real’ and ‘virtual’ time? Give one
+example of using each (2.5 pts).
+
+Real time is a timer that counts the time passes while the whole system is
+running. If the system is working for X time, real time will indicate that.
+Virtual time is relative to a process. It is the time passed while the
+process is running. When the process is preempted by the OS, this time
+pauses until the next time it will run again.
+
+
+4. a. When creating a new process using fork command, which of the following
+are common among the parent and the child processes? i. Stack ii. Heap iii.
+Global variables
+
+The common part between the parent and the child process is the Text memory,
+where the code of the program is held, and where the global variables are.
+For that reason iii. Global Variables is common between the parent and child
+process.
+
+
+b. What is pipe? Why is there a need for it? (2.5 pts).
+
+A pipe is a special file with FIFO semantics: it can be written sequentially
+(by one process) and read sequentially (by another). The data is buffered,
+but is not stored on disk. Also, there is no option to seek to the middle, as
+is possible with regular files. When the buffer is full, the writing process
+is blocked by the OS. If the buffer is empty, the reading process is blocked.
+There is a need for pipes in order to communicate between processes.
