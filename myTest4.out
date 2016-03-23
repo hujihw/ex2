@@ -1,0 +1,362 @@
+
+-------------------1---------------------
+
+	  main  q:  0
+	  running = 1
+  created thread with func : f
+  created thread with func : g
+
+-------------------2---------------------
+
+	  f  q:  1
+	  running = 1
+	  h create by f
+
+-------------------3---------------------
+
+	  g  q:  2
+	  running = 1
+	g blocked by g 
+
+-------------------4---------------------
+
+	  main  q:  0
+	  running = 2
+	f blocked by main
+
+-------------------5----------------------
+
+	  h  q:  3
+	  running = 1
+	  try to block f
+
+-------------------6---------------------
+
+	  main  q:  0
+	  running = 3
+	h blocked by main
+
+-------------------7---------------------
+
+	  main  q:  0
+	  running = 4
+	g resumed by main
+
+-------------------8---------------------
+
+	  g  q:  2
+	  running = 2
+	  f resumed by g
+
+-------------------9---------------------
+
+	  main  q:  0
+	  running = 5
+	main thread try to sleep
+
+-------------------10---------------------
+
+	  f  q:  1
+	  running = 2
+h resumed by f
+
+-------------------11---------------------
+
+	  g  q:  2
+	  running = 3
+	  g sleep 10 quantums
+
+-------------------12---------------------
+
+	  main  q:  0
+	  running = 6
+
+-------------------13----------------------
+
+	  h  q:  3
+	  running = 2
+	  g wakeup after =9
+
+-------------------14---------------------
+
+	  f  q:  1
+	  running = 3
+	  main blocked by f
+
+-------------------15---------------------
+
+	  main  q:  0
+	  running = 7
+	h blocked by main
+
+-------------------16---------------------
+
+	  f  q:  1
+	  running = 4
+	 g wakeup after =6
+
+-------------------17---------------------
+
+	  main  q:  0
+	  running = 8
+	  try to resumed f by main thread
+
+-------------------18---------------------
+
+	  f  q:  1
+	  running = 5
+	  h resumed by f
+
+-------------------19---------------------
+
+	  main  q:  0
+	  running = 9
+	  try to block g
+
+-------------------20----------------------
+
+	  h  q:  3
+	  running = 3
+	  g wakeup after =0
+
+-------------------21---------------------
+
+	  f  q:  1
+	  running = 6
+	  f go to sleep 6 quantum
+
+-------------------22---------------------
+
+	  main  q:  0
+	  running = 10
+	  h terminated by main
+	  total running q: 3
+	  ** h end **
+
+-------------------23---------------------
+
+	  g  q:  2
+	  running = 4
+	  f wakeup after = 5
+
+-------------------24---------------------
+
+	  main  q:  0
+	  running = 11
+
+-------------------25---------------------
+
+	  g  q:  2
+	  running = 5
+	  t create by g
+
+-------------------26---------------------
+
+	  main  q:  0
+	  running = 12
+	try to block f
+
+-------------------27----------------------
+
+	  t  q:  3
+	  running = 1
+	  g blocked by t
+
+-------------------28---------------------
+
+	  main  q:  0
+	  running = 13
+	t blocked by main
+
+-------------------29---------------------
+
+	  f  q:  1
+	  running = 7
+	  f terminated by  f
+	  total running q: 7
+	  ** f end **
+
+-------------------30---------------------
+
+	  main  q:  0
+	  running = 14
+	  g resumed by main
+
+-------------------31---------------------
+
+	  g  q:  2
+	  running = 6
+	  t resumed by g
+
+-------------------32---------------------
+
+	  main  q:  0
+	  running = 15
+
+-------------------33----------------------
+
+	  t  q:  3
+	  running = 2
+	  g terminate by t
+	  total running q: 6
+	  ** g end **
+
+-------------------34---------------------
+
+	  main  q:  0
+	  running = 16
+  w created by main
+
+-------------------35----------------------
+
+	  t  q:  3
+	  running = 3
+	  v created by t
+
+-------------------36----------------------
+
+	  w  q:  1
+	  running = 1
+	  v blocked by w
+
+-------------------37---------------------
+
+	  main  q:  0
+	  running = 17
+	main sleep by main 
+
+-------------------38----------------------
+
+	  t  q:  3
+	  running = 4
+	  try to sleep
+
+-------------------39----------------------
+
+	  w  q:  1
+	  running = 2
+	  v resumed by w
+
+-------------------40---------------------
+
+	  main  q:  0
+	  running = 18
+	main blocked by main
+
+-------------------41----------------------
+
+	  t  q:  3
+	  running = 5
+	  w blocked by t
+	  t go to sleep 2 quantum
+
+-------------------42----------------------
+
+	  v  q:  2
+	  running = 1
+	  t blocked by v
+
+-------------------43---------------------
+
+	  main  q:  0
+	  running = 19
+
+-------------------44----------------------
+
+	  v  q:  2
+	  running = 2
+
+-------------------45----------------------
+
+	  t  q:  3
+	  running = 6
+	  w resumed by t
+
+-------------------46---------------------
+
+	  main  q:  0
+	  running = 20
+
+-------------------47----------------------
+
+	  v  q:  2
+	  running = 3
+
+-------------------48----------------------
+
+	  w  q:  1
+	  running = 3
+	  v blocked by w
+
+-------------------49----------------------
+
+	  t  q:  3
+	  running = 7
+	  t terminated by t
+	  total running q: 7
+	  ** t end **
+
+-------------------50---------------------
+
+	  main  q:  0
+	  running = 21
+	v terminated by main
+	  total running q: 3
+	  ** v end **
+
+-------------------51----------------------
+
+	  w  q:  1
+	  running = 4
+	  q created by w
+
+-------------------52---------------------
+
+	  main  q:  0
+	  running = 22
+
+-------------------53----------------------
+
+	  q  q:  2
+	  running = 1
+	  w terminated by q
+	  total running q: 4
+	  ** w end **
+
+-------------------54---------------------
+
+	  main  q:  0
+	  running = 23
+
+-------------------55----------------------
+
+	  q  q:  2
+	  running = 2
+	  q go to sleeo for 1 quantum
+
+-------------------56---------------------
+
+	  main  q:  0
+	  running = 24
+
+-------------------57----------------------
+
+	  q  q:  2
+	  running = 3
+	  q blocked by q
+
+-------------------58---------------------
+
+	  main  q:  0
+	  running = 25
+
+-------------------59---------------------
+
+	  main  q:  0
+	  running = 26
+	  total running q: 3
+	    ** q end **
+	  total running main: 26
+	    ** main end **
+total quantums:  59
+	  *** end ****

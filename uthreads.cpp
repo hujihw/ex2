@@ -5,7 +5,7 @@
 #include <vector>
 #include <errno.h>
 #include <iostream>
-#include <list>
+#include <algorithm>
 #include "uthreads.h"
 #include <unistd.h>
 
@@ -75,10 +75,10 @@ public:
     void decreaseSleepingCountdown();
 
 private:
-    int sleepingCountdown;
+    int sleepingCountdown = 0;
     unsigned int id;
     status_t status;
-    unsigned int quantaCounter = 1;
+    unsigned int quantaCounter = 0;
     char *stack;
     void (*entry_point); // todo remove
 };
@@ -101,17 +101,77 @@ sigset_t set; //the signal set for sigporcmask
 
 void timer_handler(int sig);
 
-void wakeupSleepingThreads() {
-    for (int i = 0; i < sleepingThreads.size(); ++i) {
-        (*sleepingThreads[i]).decreaseSleepingCountdown();
-        if ((*sleepingThreads[i]).getSleepingCountdown() == 0) {
-            (*sleepingThreads[i]).setStatus(Ready);
-            readyThreads.push_back(sleepingThreads[i]);
-            sleepingThreads.erase(sleepingThreads.begin() + i);
-        }
-    }
+bool threadDoneSleeping(Thread *thread) {
+    return thread->getSleepingCountdown() == 0;
 }
 
+void wakeupSleepingThreads() {
+//    std::cout << "sleeping vector: " << std::endl; // todo remove
+//    for (std::vector<Thread*>::iterator it = sleepingThreads.begin() ; it != sleepingThreads.end(); ++it)
+//    {
+//        std::cout << "ID: " << (*it)->getId() << std::endl;
+//        std::cout << "Status: " << (*it)->getStatus() << std::endl;
+//        std::cout << "Sleeping Counter: " << (*it)->getSleepingCountdown() << std::endl;
+//    }
+//    unsigned long numberOfSleepingThreads = sleepingThreads.size();
+//    for (int i = 0; i < numberOfSleepingThreads; ++i) {
+//        if (sleepingThreads[i]->getId() == runningThread->getId()){
+//            continue;
+//        }
+////        std::cout << "thread no. " << sleepingThreads[i]->getId() << " has " << sleepingThreads[i]->getSleepingCountdown() << " q to sleep" << std::endl; //todo remove
+//        sleepingThreads[i]->decreaseSleepingCountdown();
+////        if (sleepingThreads[i]->getId() == 1) { //todo remove
+////            std::cout << "halas" << std::endl;
+////        }
+//        if (sleepingThreads[i]->getSleepingCountdown() == 0) {
+//            sleepingThreads[i]->setStatus(Ready);
+//            readyThreads.insert(readyThreads.begin(), sleepingThreads[i]);
+//            sleepingThreads.erase(sleepingThreads.begin() + i);
+//        }
+//    }
+//}
+//    std::vector<Thread*>::iterator it = sleepingThreads.begin();
+//    while (it != sleepingThreads.end()){
+//        if ((*it)->getId() == runningThread->getId()){
+//            continue;
+//        }
+//
+//        (*it)->decreaseSleepingCountdown();
+//        if ((*it)->getSleepingCountdown() == 0) { // todo magic number
+//            (*it)->setStatus(Ready);
+//            readyThreads.insert(readyThreads.begin(), (*it));
+////                sleepingThreads.end() = std::remove_if(sleepingThreads.begin(), sleepingThreads.end(), threadDoneSleeping);
+//            it = sleepingThreads.erase(it);
+//        } else {
+//            ++it;
+//        }
+//    }
+//    sleepingThreads.shrink_to_fit();
+
+    if (sleepingThreads.size() > 0) {
+        for (std::vector<Thread*>::iterator it = sleepingThreads.begin() ; it != sleepingThreads.end(); it++){
+            if ((*it)->getId() == runningThread->getId()){
+                continue;
+            }
+            (*it)->decreaseSleepingCountdown();
+            if ((*it)->getSleepingCountdown() == 0){ // todo magic number
+                (*it)->setStatus(Ready);
+                readyThreads.insert(readyThreads.begin(), (*it));
+//                sleepingThreads.end() = std::remove_if(sleepingThreads.begin(), sleepingThreads.end(), threadDoneSleeping);
+                it = sleepingThreads.erase(it);
+                if (it == sleepingThreads.end()){
+                    std::cout << "ya zain" << std::endl; // todo remove
+                    break;
+                }
+            }
+        }
+    }
+//    for (std::vector<Thread*>::iterator it = sleepingThreads.begin() ; it != sleepingThreads.end(); it++){ // todo remove
+//        if ((*it)->getSleepingCountdown() == 0) { // todo magic number
+//
+//        }
+//    }
+}
 //block the SIGVTALRM
 void blockSigvtalrm(){
     sigemptyset(&set);
@@ -161,7 +221,7 @@ void timer_handler(int sig) {
     int previousRunningThread = runningThread->getId();
 
     generalQuantaCounter += 1;
-    runningThread->quantaCounterUp();
+
 
     ////////////////////////
     /// Round Robin alg. ///
@@ -169,6 +229,14 @@ void timer_handler(int sig) {
 
     // add the threads that finished sleeping to ready vector
     wakeupSleepingThreads();
+
+//    if (threads[0]->getQuantaCounter() >= 11){
+//        std::cout << "thread 1 countdown: " << threads[1]->getSleepingCountdown() << std::endl; // todo remove
+//        std::cout << "thread 1 state: " << threads[1]->getStatus() << std::endl; // todo remove
+//        std::cout << "thread 2 countdown: " << threads[2]->getSleepingCountdown() << std::endl; // todo remove
+//        std::cout << "thread 2 state: " << threads[2]->getStatus() << std::endl; // todo remove
+//        std::cout << "thread no. " << sleepingThreads[i]->getId() << " has " << sleepingThreads[i]->getSleepingCountdown() << " q to sleep" << std::endl; //todo remove
+//    }
 
     if (runningThread->getStatus() == Running){
         runningThread->setStatus(Ready);
@@ -182,6 +250,7 @@ void timer_handler(int sig) {
         runningThread = readyThreads.back();
         runningThread->setStatus(Running);
         readyThreads.pop_back();
+        runningThread->quantaCounterUp();
 
         // terminate the thread that needs termination
         if (terminateThread != nullptr){
@@ -211,6 +280,7 @@ void timer_handler(int sig) {
 //        }
         siglongjmp(runningThread->env, 1);
     } else {
+        runningThread->quantaCounterUp();
         unIgnoreSigvtalrm();
 
         // reset timer
@@ -373,6 +443,7 @@ int uthread_init(int quantum_usecs) {
     threads[0] = new Thread(nullptr, MAIN_THREAD);
     runningThread = threads[0];
     runningThread->setStatus(Running);
+    runningThread->quantaCounterUp();
     return 0;
 }
 
@@ -408,7 +479,7 @@ int uthread_block(int tid) {
 
     if (threads[tid]->getStatus() == Blocked ||
         threads[tid]->getStatus() == Sleeping) {
-        unBlockOrUnIgnoreSigvtalrm; //todo debug
+        unBlockOrUnIgnoreSigvtalrm(tid); //todo debug
         return 0;
     }
 
@@ -422,8 +493,8 @@ int uthread_block(int tid) {
     } else { // the thread is in the ready vector
         for (int i = 0; i < readyThreads.size(); i++) {
             if (readyThreads[i]->getId() == tid) {
-                readyThreads.erase(readyThreads.begin() + i);
                 blockedThreads.insert(blockedThreads.begin(), threads[tid]);
+                readyThreads.erase(readyThreads.begin() + i);
                 break;
             }
         }
@@ -475,7 +546,9 @@ int uthread_sleep(int num_quantums) {
     }
 
     runningThread->setStatus(Sleeping);
-    blockedThreads.insert(blockedThreads.begin(), runningThread);
+    runningThread->setSleepingCountdown(num_quantums);
+//    sleepingThreads.insert(sleepingThreads.begin(), runningThread); // todo remove
+    sleepingThreads.push_back(runningThread);
     timer_handler(0); //finish the quanta
     unIgnoreSigvtalrm();
     return 0;
@@ -542,7 +615,7 @@ int uthread_terminate(int tid) {
         ignoreSigvtalrm();
 
         terminateThread = runningThread;
-        timer_handler(SIGVTALRM);
+        timer_handler(SIGVTALRM); // todo change signal
     } else {
         blockSigvtalrm();
 
@@ -557,11 +630,16 @@ int uthread_terminate(int tid) {
                 break;
 
             case Sleeping:
-                for (int i = 0; i < sleepingThreads.size(); ++i) {
-                    if (sleepingThreads[i]->getId() == tid) {
-                        sleepingThreads.erase(sleepingThreads.begin() + i);
+                for (std::vector<Thread*>::iterator it = sleepingThreads.begin() ; it != sleepingThreads.end(); it++) {
+                    if ((*it)->getId()){
+                        sleepingThreads.erase(it);
                     }
                 }
+//                for (int i = 0; i < sleepingThreads.size(); ++i) {
+//                    if (sleepingThreads[i]->getId() == tid) {
+//                        sleepingThreads.erase(sleepingThreads.begin() + i);
+//                    }
+//                }
                 break;
 
             case Blocked:
